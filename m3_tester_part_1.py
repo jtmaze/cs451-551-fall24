@@ -6,7 +6,7 @@ from lstore.transaction_worker import TransactionWorker
 from random import choice, randint, sample, seed
 
 db = Database()
-db.open('./ECS165')
+db.open('./CS451')
 
 # creating grades table
 grades_table = db.create_table('Grades', 5, 0)
