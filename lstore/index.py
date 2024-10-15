@@ -1,13 +1,18 @@
 """
-A data structure holding indices for various columns of a table. Key column should be indexd by default, other columns can be indexed through this object. Indices are usually B-Trees, but other data structures can be used as well.
+A data structure holding indices for various columns of a table.
+
+Key column should be indexd by default, other columns can be indexed through 
+this object.
+
+Indices are usually B-Trees, but other data structures can be used as well.
 """
 
 
 class Index:
 
-    def __init__(self, table):
+    def __init__(self, num_columns):
         # One index for each table. All our empty initially.
-        self.indices = [None] * table.num_columns
+        self.indices = [None for _ in range(num_columns)]
         pass
 
     def locate(self, column, value):

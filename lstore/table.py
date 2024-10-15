@@ -4,7 +4,7 @@ from time import time
 INDIRECTION_COLUMN = 0  # Base: RID of latest tail; Tail: RID of prev
 RID_COLUMN = 1  # Record ID (and index/location/hashable in page directory)
 TIMESTAMP_COLUMN = 2  # Timestamp for both base and tail record
-SCHEMA_ENCODING_COLUMN = 3  # Bits representing cols, 1s where updated and tails exist
+SCHEMA_ENCODING_COLUMN = 3  # Bits representing cols, 1s where updated
 
 
 class Record:
@@ -35,8 +35,11 @@ class Table:
         self.num_columns = num_columns
         self.key = key
 
-        self.page_directory = {}
-        self.index = Index(self)
+        # Maps RID to data location for fast point query
+        # Ideally, use index for range queries
+        self.page_directory = dict()
+
+        self.index = Index(num_columns)
 
     def __merge(self):
         print("merge is happening")
