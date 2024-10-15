@@ -1,35 +1,42 @@
 from lstore.index import Index
 from time import time
 
-INDIRECTION_COLUMN = 0
-RID_COLUMN = 1
-TIMESTAMP_COLUMN = 2
-SCHEMA_ENCODING_COLUMN = 3
+INDIRECTION_COLUMN = 0  # Base: RID of latest tail; Tail: RID of prev
+RID_COLUMN = 1  # Record ID (and index/location/hashable in page directory)
+TIMESTAMP_COLUMN = 2  # Timestamp for both base and tail record
+SCHEMA_ENCODING_COLUMN = 3  # Bits representing cols, 1s where updated and tails exist
 
 
 class Record:
+    """
+    :param rid:      # Record ID
+    :param key:      #
+    :param columns:  # [Indirection | RID | Timestamp | Schema Encoding] (see above)
+    """
 
     def __init__(self, rid, key, columns):
         self.rid = rid
         self.key = key
         self.columns = columns
 
-class Table:
 
+class Table:
     """
-    :param name: string         #Table name
-    :param num_columns: int     #Number of Columns: all columns are integer
-    :param key: int             #Index of table key in columns
+    :param name:         # Table name
+    :param num_columns:  # Number of columns: all columns are integer
+    :param key:          # Index of table key in columns (ie primary key, ex 2 if 3rd col)
     """
-    def __init__(self, name, num_columns, key):
+
+    def __init__(self, name: str, num_columns: int, key: int):
+        if key >= num_columns:
+            raise IndexError("Key index is greater than the number of columns")
+
         self.name = name
-        self.key = key
         self.num_columns = num_columns
+        self.key = key
+
         self.page_directory = {}
         self.index = Index(self)
-        pass
 
     def __merge(self):
         print("merge is happening")
-        pass
- 
