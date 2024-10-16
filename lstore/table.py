@@ -1,6 +1,9 @@
 from lstore.index import Index
 from time import time
 
+import config
+from storage.page_dir import PageDirectory
+
 INDIRECTION_COLUMN = 0  # Base: RID of latest tail; Tail: RID of prev
 RID_COLUMN = 1  # Record ID (and index/location/hashable in page directory)
 TIMESTAMP_COLUMN = 2  # Timestamp for both base and tail record
@@ -35,9 +38,10 @@ class Table:
         self.num_columns = num_columns
         self.key = key
 
-        # Maps RID to data location for fast point query
-        # Ideally, use index for range queries
-        self.page_directory = dict()
+        # Given RID, returns records
+        self.page_directory = PageDirectory(
+            buffer_size=None, #config.MAX_BUFFER_SIZE
+        )
 
         self.index = Index(num_columns)
 
