@@ -1,3 +1,5 @@
+from typing import Literal
+
 from lstore.table import Table, Record
 from lstore.index import Index
 
@@ -14,16 +16,16 @@ class Query:
         self.table = table
         pass
 
-    def delete(self, primary_key):
+    def delete(self, primary_key) -> bool:
         """
         # internal Method
         # Read a record with specified RID
-        # Returns True upon succesful deletion
+        # Returns True upon successful deletion
         # Return False if record doesn't exist or is locked due to 2PL
         """
         pass
 
-    def insert(self, *columns):
+    def insert(self, *columns) -> bool:
         """
         # Insert a record with specified columns
         # Return True upon succesful insertion
@@ -32,7 +34,12 @@ class Query:
         schema_encoding = '0' * self.table.num_columns  # TODO: use actual bits
         pass
 
-    def select(self, search_key, search_key_index, projected_columns_index: list[bool | int]):
+    def select(
+        self,
+        search_key,
+        search_key_index,
+        projected_columns_index: list[Literal[0, 1]]
+    ) -> list[Record] | False:
         """
         # Read matching record with specified search key
         # :param search_key: the value you want to search based on
@@ -57,7 +64,7 @@ class Query:
         """
         pass
 
-    def update(self, primary_key, *columns):
+    def update(self, primary_key, *columns) -> bool:
         """
         # Update a record with specified key and columns
         # Returns True if update is succesful

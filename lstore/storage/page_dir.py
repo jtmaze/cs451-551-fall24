@@ -1,5 +1,7 @@
 from storage.buffer import Buffer
-from storage.buffer import Disk
+from storage.disk import Disk
+
+from rid import RID
 
 class PageDirectory:
     """
@@ -10,14 +12,14 @@ class PageDirectory:
         self.disk = Disk() # TODO: Support persistent memory
 
 
-    def get(self, rid, *columns):
+    def get(self, rid: RID, *columns):
         # Check buffer
-        output = self.buffer.get(rid, columns)
+        output = self.buffer.check(rid, columns)
         if output:
             return output
         
         # Check disk
-        output = self.disk.get(rid, columns)
+        output = self.disk.retrieve(rid, columns)
         if output:
             self.buffer.update(rid, output)
             return output

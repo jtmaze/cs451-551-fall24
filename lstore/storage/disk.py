@@ -1,7 +1,9 @@
+from rid import RID
+
 class Disk:
     def __init__(self) -> None:
         pass
 
-    def get(rid, *columns):
+    def retrieve(rid: RID, *columns):
         return None
     
