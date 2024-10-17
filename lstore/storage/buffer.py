@@ -5,10 +5,10 @@ from rid import RID
 
 
 class Buffer:
-    """
-    """
+    """Holds pages in memory."""
 
-    def __init__(self, max_items: int | None) -> None:
+    def __init__(self, page_dir, max_items: int | None) -> None:
+        self.page_dir = page_dir
         self.max_items = max_items
 
         self.records = dict()
@@ -18,19 +18,18 @@ class Buffer:
         self.staleness_heap = []
         self.heap_counter = count()
 
-    def check(self, rid: RID, *columns):
+    def check(self, rid: RID, cols):
         """Checks if RID in records and returns result if true.
 
         May want to move directly to page directory to minimize function call
         overhead.
         """
         # TODO: update staleness queue?
-        if rid in self.records:
-            return self.records[rid]
+        output = self.records.get(rid, None)
 
-        return None
+        return output
 
-    def update(self, rid: RID, output):
+    def insert(self, rid: RID, output):
         self.records[rid] = output
 
         if self.max_items is not None:

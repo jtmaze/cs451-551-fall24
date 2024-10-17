@@ -11,10 +11,10 @@ SCHEMA_ENCODING_COLUMN = 3  # Bits representing cols, 1s where updated
 
 
 class Record:
-    """
+    """Data record (not metadata)
     :param rid:      # Record ID
-    :param key:      #
-    :param columns:  # [Indirection | RID | Timestamp | Schema Encoding] (see above)
+    :param key:      # Primary key value
+    :param columns:  # Data in record's columns (including key)
     """
 
     def __init__(self, rid, key, columns):
@@ -40,6 +40,7 @@ class Table:
 
         # Given RID, returns records
         self.page_directory = PageDirectory(
+            num_columns=num_columns,
             buffer_size=None, #config.MAX_BUFFER_SIZE
         )
 
