@@ -13,9 +13,9 @@ class PageDirectory:
     def __init__(self, num_columns: int, buffer_size: int) -> None:
         self.num_columns = num_columns
 
-        self.buffer = Buffer(self, buffer_size)
+        self.buffer = Buffer(buffer_size)
 
-        self.disk = Disk(self) # TODO: Support persistent memory
+        self.disk = Disk() # TODO: Support persistent memory
 
 
     def get(self, rid: RID, cols: list[Literal[0, 1]]) -> list[Record]:
