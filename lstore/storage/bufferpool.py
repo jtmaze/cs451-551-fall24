@@ -27,7 +27,7 @@ class Bufferpool:
         self.pages[rid] = page
 
         # Remove oldest if buffer full (first in ordered dict)
-        if len(self.pages) > self.max_size:
+        if self.max_size and len(self.pages) > self.max_size:
             self.pages.popitem(last=False)
 
     def remove_page(self, rid):
