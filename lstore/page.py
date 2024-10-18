@@ -17,4 +17,15 @@ class Page:
         else:
             # If the page is full, raise an exception
             raise Exception("Page is full. Cannot write more records.")
+        
+    def read(self, rid):
+        raise NotImplementedError()
+    
+    def update(self, rid, updated_values):
+        raise NotImplementedError()
+        
+    def invalidate(self, rid):
+        # TODO: Page 'deletion'
+        raise NotImplementedError()
+    
 

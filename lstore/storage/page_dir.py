@@ -1,37 +1,34 @@
-from typing import Literal
-
-from table import Record
-
-from storage.buffer import Buffer
+from storage.bufferpool import Bufferpool
 from storage.disk import Disk
 
-from rid import RID
+from page import Page
 
 class PageDirectory:
     """
     """
+
     def __init__(self, num_columns: int, buffer_size: int) -> None:
         self.num_columns = num_columns
 
-        self.buffer = Buffer(buffer_size)
+        self.bufferpool = Bufferpool(buffer_size)
 
-        self.disk = Disk() # TODO: Support persistent memory
+        self.disk = Disk()  # TODO: Support persistent memory
 
-
-    def get(self, rid: RID, cols: list[Literal[0, 1]]) -> list[Record]:
-        """Returns the projected data given an RID.
-
-        Like Query.select, cols refers to which data columns to return (0=False, 1=True)
+    def get_page(self, rid, cols=None) -> Page | None:
+        """
         """
         # Check buffer
-        output = self.buffer.check(rid, cols)
-        if output:
-            return output
+        page = self.bufferpool.get_page(rid)
+
+        # Go to persistent memory if not in buffer
+        if page is None:
+            page = self.disk.get_page(rid)
+            if page:
+                self.bufferpool.add_page(rid, page)
         
-        # Check disk
-        output = self.disk.retrieve(rid, cols)
-        if output:
-            self.buffer.insert(rid, output)
-            return output
-        
-        raise KeyError(f"RID <{rid}> not found in buffer or persistent memory")
+        return page
+
+    def add_page(self, rid, page):
+        self.disk.add_page(rid, page)
+
+        self.bufferpool.add_page(rid, page)
