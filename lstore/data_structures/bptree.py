@@ -1,4 +1,5 @@
 import math
+import pprint as pp # For debugging, !!! remove later
 
 class BPTreeNode:
     def __init__(self, n):
@@ -53,14 +54,14 @@ class BPTreeNode:
                         print('ERROR: Unhandled case for leaf_insert')
                         return
 
-        def point_query_n(self, key):
+        def point_query_node(self, key):
             current_node = self
             current_vals = self.values
             current_keys = self.keys
 
             pass
         
-        def range_query_n(self, low_val, high_val):
+        def range_query_node(self, low_val, high_val):
             current_node = self
             current_vals = self.values
             current_keys = self.keys
@@ -83,27 +84,73 @@ class BPTree:
         """
 
         self.n = n        
-    
+        self.root = BPTreeNode(n)
+        self.root.is_leaf = True
+
+
     def insert_node(self, key_insert, value_insert):
         
         # Need to figure out some way to check if node is a leaf or internal...
-        previous_node = None # Need to build pointer to previous node
+        previous_node = self.search_node(value_insert) # Need to build pointer to previous node
         previous_node.leaf_insert(previous_node, key_insert, value_insert) # First try insert at leaf
 
-        if (len(previous_node.keys) > self.n):
+        # If leaf is full, split the node
+        if (len(previous_node.keys) == previous_node.n):
             print('Node is full, splitting')
-            pass
+            new_node = BPTreeNode(previous_node.n)
+            new_node.is_leaf = True
+            new_node.parent_node = previous_node.parent_node
+            # Seems like previous_node.parent_node is not recognized above
+            pp.pp(previous_node.parent_node, new_node.parent_node)
+            split_size = int(math.ceil(self.n/2)) - 1
+            new_node.keys = previous_node.keys[split_size + 1:]
+            new_node.values = previous_node.values[split_size + 1:]
+            previous_node.keys = previous_node.keys[:split_size + 1]
+            previous_node.values = previous_node.values[:split_size + 1]
+            previous_node.forward_key = new_node
+            self.insert_above() # Needt to build this function
 
-        print('Key(s) inserted')
-        pass
-
-    def search_node(self, key, value):
-
-        print('Key(s) deleted')
-        pass
+            pp.pp(f""" NEW NODE: {new_node.key}, {new_node.values}
+                  ------------------------------------------------
+                  SPLIT NODE: {previous_node.key}, {previous_node.values}""")
 
 
+    def search_node(self, key_search, value_search):
+        current_node = self.root
+        while (current_node.is_leaf == False):
+            node_vals = current_node.values
+            for i in range(len(node_vals)):
+                if (value_search == node_vals[i]):
+                    result_node = current_node.keys[i + 1]
+                    break
+                elif (value_search < node_vals[i]):
+                    result_node = current_node.keys[i]
+                    break
+                elif (i + 1 == len(node_vals)):
+                    result_node = current_node.keys[i + 1]
+                    break
+        return result_node
 
+    def get_node(self, key_search, value_search):
+        """
+        These arguments are probably wrong..
+        """
+
+        node = self.search_node(value_search)
+        node_keys = node.keys
+        node_values = node.values
+        for i in range(len(node)):
+            if node_values[i] == value_search and node_keys[i] == key_search:
+                print("Found node :)")
+                return True
+            else:
+                return False
+        return
+
+
+
+
+"""
     def point_query(self, key):
 
         value = 'somestuff'
@@ -117,3 +164,4 @@ class BPTree:
 
         return values
 
+"""
