@@ -33,23 +33,23 @@ class BPTreeNode:
             # 2) Leaf node is not empty
             else:
                 for i in range(len(current_vals)):
-                    # Throw error if RID duplicated
-                    if value_insert == current_vals[i] or key_insert == current_keys[i]: # Not sure if I shold also check current keys??
-                        print(f'ERROR: Duplicate RID {value_insert} or key {key_insert} Violates L-Store unique RID Constraint')
+                    # First try to insert on lower keys and values
+                    if value_insert < current_vals[i] and key_insert < current_keys[i]:
+                        self.values.insert(i, value_insert)
+                        self.keys.insert(i, key_insert)
+                        print(f'Key:{key_insert} and RID:{value_insert} inserted on leaf node')
                         return
-                    # Append on the end of keys and values are greater than the current max
+                    # Then, append on the end of keys and values are greater than the current max
                     elif value_insert > current_vals[i] and key_insert > current_keys[i]: 
                         self.values.append(value_insert)
                         self.keys.append(key_insert)
                         print(f'Key:{key_insert} and RID:{value_insert} inserted on leaf node')
                         return
-                    # Insert keys and values into correct position
-                    elif value_insert < current_vals[i] and key_insert < current_keys[i]:
-                        self.values.insert(i, value_insert)
-                        self.keys.insert(i, key_insert)
-                        print(f'Key:{key_insert} and RID:{value_insert} inserted on leaf node')
+                    # Throw an error if the key or RID is already in the node
+                    elif value_insert == current_vals[i] or key_insert == current_keys[i]: # Not sure if I shold also check current keys??
+                        print(f'ERROR: Duplicate RID {value_insert} or key {key_insert} Violates L-Store unique RID Constraint')
                         return
-                    # Catch-all error
+                    # Catch all for unhandled cases (e.g. key_insert < current_keys BUT value_insert > current_vals)
                     else:
                         print('ERROR: Unhandled case for leaf_insert')
                         return
@@ -88,9 +88,9 @@ class BPTree:
         self.root.is_leaf = True
 
 
-    def insert_node(self, key_insert, value_insert):
+    def split_node(self, key_insert, value_insert):
         
-        # Need to figure out some way to check if node is a leaf or internal...
+        # Need to figure out some way to check if node is a leaf or internal???
         previous_node = self.search_node(value_insert) # Need to build pointer to previous node
         previous_node.leaf_insert(previous_node, key_insert, value_insert) # First try insert at leaf
 
@@ -115,20 +115,27 @@ class BPTree:
                   SPLIT NODE: {previous_node.key}, {previous_node.values}""")
 
 
-    def search_node(self, key_search, value_search):
-        current_node = self.root
-        while (current_node.is_leaf == False):
-            node_vals = current_node.values
+    def search_node(self, value_search):
+        """
+        key_search: key to search for
+        value_search: value to search for
+        """
+        current_node = self.root # Start at the root
+        while (current_node.is_leaf == False): # Keeping going until we reach a leaf
+            node_vals = current_node.values 
             for i in range(len(node_vals)):
-                if (value_search == node_vals[i]):
-                    result_node = current_node.keys[i + 1]
+                if (value_search == node_vals[i]): # The search equals the current
+                    result_node = current_node.keys[i + 1] # The result node points to the right
                     break
-                elif (value_search < node_vals[i]):
-                    result_node = current_node.keys[i]
+                elif (value_search < node_vals[i]): # Search is less than the current
+                    result_node = current_node.keys[i] # The result node points to the left
                     break
-                elif (i + 1 == len(node_vals)):
-                    result_node = current_node.keys[i + 1]
+                elif (i + 1 == len(node_vals)): # Search greater than all node vals
+                    result_node = current_node.keys[i + 1] # points to the right
                     break
+                else:
+                    print("search_node: Error")
+
         return result_node
 
     def get_node(self, key_search, value_search):
