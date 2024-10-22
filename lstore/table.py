@@ -14,14 +14,15 @@ SCHEMA_ENCODING_COLUMN = 3  # Bits representing cols, 1s where updated
 
 class Record:
     """
-    Data record (not metadata)
-    :param rid:      # Record ID
-    :param key:      # Primary key value
-    :param columns:  # Data in record's columns (including key)
+    Data record (not metadata). RID gets populated by page directory.
+    :param rid:
+    :param key:
+    :param columns:
     """
 
-    def __init__(self, rid, key, columns):
-        self.rid = rid
+    def __init__(self, key, columns):
+        self.rid = None
+
         self.key = key
         self.columns = columns
 
@@ -44,7 +45,7 @@ class Table:
         # Given RID, returns records (checks bufferpool first)
         self.page_directory = PageDirectory(
             num_columns=num_columns,
-            buffer_size=config.MAX_BUFFER_SIZE, # None -> uncapped
+            buffer_size=config.MAX_BUFFER_SIZE,  # None -> uncapped
         )
 
         # Index for faster querying on primary key and possibly other columns
@@ -53,33 +54,34 @@ class Table:
     def __merge(self):
         print("merge is happening")
 
-    def insert(self, record: Record):
+    def insert(self, record: Record) -> int:
         """
-        Insert a new record into the table. Allocate a new page if needed and
-        store the record in the bufferpool/disk through the directory.
+        Given a new Record with a key and columns filled, populates the rid
+        field and stores the record in pages accessed through the updated
+        directory.
+
+        Returns an error code as an integer:
+            0: No error
+            1: Unspecified error
+            2: Duplicate RID
         """
-        rid = self._generate_rid()
-        page = self.page_directory.get_page(rid)
-
-        # If the page does not exist in the bufferpool, create a new page
-        if page is None:
-            page = Page()
-
-        # Write the new record to the page
         try:
-            # Assuming the key is the value being written for simplicity
-            page.write(record.key)
+            # Insert a record, directory will populate the RID field (and return it)
+            rid = self.page_directory.insert_record(record)
+        except KeyError as a:
+            print(f"Can't insert record '{record.rid}' as it already exists")
+            return 2
         except Exception as e:
-            print(f"Error inserting record: {e}")
-            return
-
-        # Add the new page to the directory
-        self.page_directory.add_page(rid, page)
+            # This catch-all error should be last
+            print(f"Error inserting record '{record.rid}'")
+            return 1
 
         # Optionally update the index (this could be more sophisticated based on your needs)
-        self.index.create_index(self.key)
+        self.index.create_index(self.key, rid)
 
-    def select(self, key):
+        return 0
+
+    def select(self, key, columns=None) -> list[Record]:
         """
         Select records based on the primary key. Use the index for fast lookup.
         """
@@ -87,10 +89,12 @@ class Table:
 
         result = []
         for rid in rid_list:
-            page = self.page_directory.get_page(rid)
+            try:
+                record: Record = self.page_directory.get_record(rid, columns)
+            except KeyError as e:
+                print(f"Failed to find rid={rid}")
 
-            if page:
-                result.append(page.read(rid))
+            result.append(record)
 
         return result
 
@@ -111,11 +115,3 @@ class Table:
         if page:
             page.invalidate(rid)
             self.page_directory.add_page(rid, page)
-
-    # Helpers ---------------------
-
-    def _generate_rid(self):
-        """
-        A simple RID generator.
-        """
-        return int(time() * 1000)  # Using the current time as a RID generator
