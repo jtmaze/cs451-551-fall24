@@ -1,6 +1,8 @@
+# %%
 import math
 import pprint as pp # For debugging, !!! remove later
 
+# %%
 class BPTreeNode:
     def __init__(self, n):
        
@@ -96,66 +98,77 @@ class BPTree:
         leaf_node = self.search_node(key_insert) 
         leaf_node.leaf_insert(leaf_node, key_insert, value_insert) 
         if len(leaf_node.keys) > self.n -1: # If the leaf node is full, split the node
-            self.split_node(key_insert, value_insert)
+            self.split_node(leaf_node)
 
 
-    def split_node(self, key_insert, value_insert):
+    def split_node(self, node_to_split):
         """
         Splits a given node and updates the tree structure
         """
         
-        # Need to figure out some way to check if node is a leaf or internal???
-        previous_node = self.search_node(value_insert) # Searches for appropriate leaf node
-        previous_node.leaf_insert(previous_node, key_insert, value_insert) # First try insert at leaf
+        new_node = BPTreeNode(self.n)
+        new_node.is_leaf = node_to_split.is_leaf
+        new_node.parent_node = node_to_split.parent_node 
 
-        # If leaf is full, split the node
-        if (len(previous_node.keys) == previous_node.n):
-            print('Node is full, splitting')
-            # The new node will hold 1/2 the values of the previous node
-            new_node = BPTreeNode(previous_node.n)
-            new_node.is_leaf = True
-            new_node.parent_node = previous_node.parent_node # Seems like previous_node.parent_node is not recognized above
-            pp.pp(previous_node.parent_node, new_node.parent_node)
-            # Split the two nodes in half
-            split_size = int(math.ceil(self.n / 2)) - 1
-            # Populate the new node with the second half of the previous node
-            new_node.keys = previous_node.keys[split_size + 1:]
-            new_node.values = previous_node.values[split_size + 1:]
-            # Keep the first half of the previous node in the previous node
-            previous_node.keys = previous_node.keys[:split_size + 1]
-            previous_node.values = previous_node.values[:split_size + 1]
-            # Point the previous node to the new node
-            previous_node.forward_key = new_node
-            self.insert_above(previous_node, new_node.values[0], new_node) # Put the smallest value of new_node in the parent node
+        split_index = len(node_to_split.keys) // 2 #
 
-            pp.pp(f""" NEW NODE: {new_node}
-                  ------------------------------------------------
-                  SPLIT NODE: {previous_node} """)
+        new_node.keys = node_to_split.keys[split_index:]
+        new_node.values = node_to_split.values[split_index:]
+        node_to_split.keys = node_to_split.keys[:split_index]
+        node_to_split.values = node_to_split.values[:split_index]
+
+        if node_to_split.is_leaf:
+            new_node.forward_key = node_to_split.forward_key
+            node_to_split.forward_key = new_node
+
+        else:
+            for child in new_node.values:
+                child.parent_node = new_node
+
+        if node_to_split.parent_node is None:
+            new_root = BPTreeNode(self.n)
+            new_root.keys = [new_node.keys[0]]
+            new_root.values = [node_to_split, new_node]
+            new_root.is_leaf = False
+            node_to_split
+            new_node.parent_node = new_root
+            self.root = new_root
+        else:
+            self.insert_at_parent(node_to_split.parent_node, new_node.keys[0], new_node)
+
+    def insert_at_parent(self, parent_node, key_insert, child_node):
+        """
+        Inserts a key and child node into the parent node
+        """
+        index = 0
+        while index < len(parent_node.keys) and parent_node.keys[index] < key_insert:
+            index += 1
+
+        parent_node.keys.insert(index, key_insert)
+        parent_node.values.insert(index + 1, child_node)
+
+        child_node.parent_node = parent_node
+
+        if len(parent_node.keys) > self.n - 1:
+            self.split_node(parent_node)
 
 
     def search_node(self, key_search):
         """
-        Traverses the tree from root-downward until a leaf node is found. 
+        Traverses the tree from root-downward until a leaf node is found.
         key_search: key to search for
-        value_search: value to search for
         """
-        current_node = self.root # Start at the root
-        while (current_node.is_leaf == False): # Keeping going until we reach a leaf
-            node_keys = current_node.values 
-            for i in range(len(node_keys)):
-                if (key_search == node_keys[i]): # The search equals the current
-                    result_node = current_node.keys[i + 1] # The result node points to the right
-                    break
-                elif (key_search < node_keys[i]): # Search is less than the current
-                    result_node = current_node.keys[i] # The result node points to the left
-                    break
-                elif (i + 1 == len(node_keys)): # Search greater than all node vals
-                    result_node = current_node.keys[i + 1] # points to the right
-                    break
-                else:
-                    print("search_node: Error")
+        current_node = self.root  # Start at the root
 
-        return result_node
+        while not current_node.is_leaf:  # Keep going until we reach a leaf
+            i = 0
+            # Find the child to follow
+            while i < len(current_node.keys) and key_search >= current_node.keys[i]:
+                i += 1
+            current_node = current_node.values[i]
+
+        # Once we're at a leaf node, return it
+        return current_node
 
     def get_node(self, key_search, value_search):
         """
@@ -175,19 +188,30 @@ class BPTree:
 
 
 
+# %% Testing down here because I'm a noob
 
-"""
-    def point_query(self, key):
+order = 4  
+bptree = BPTree(order)
 
-        value = 'somestuff'
+# Insert key/value pairs
+keys_to_insert = [10, 20, 5, 6, 12, 30, 7, 17, 50, 53]
+values_to_insert = [100, 200, 50, 60, 120, 300, 70, 170, 500, 520]
 
-        return value
+for key, value in zip(keys_to_insert, values_to_insert):
+    bptree.insert(key, value)
 
-    def range_query(self, key_low, key_high):
-        
-        # Is it appropriate to return a list???
-        values = ['some other stuff']
+# Function to print the tree structure
+def print_tree(node, level=0):
+    indent = '   ' * level
+    if node.is_leaf:
+        print(f"{indent}Leaf Node: Keys={node.keys}")
+    else:
+        print(f"{indent}Internal Node: Keys={node.keys}")
+        for child in node.values:
+            print_tree(child, level + 1)
 
-        return values
+print_tree(bptree.root)
 
-"""
+
+
+# %%
