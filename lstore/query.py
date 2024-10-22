@@ -14,7 +14,7 @@ class Query:
 
     def __init__(self, table):
         self.table = table
-        pass
+
 
     def delete(self, primary_key) -> bool:
         """
@@ -23,7 +23,17 @@ class Query:
         # Returns True upon successful deletion
         # Return False if record doesn't exist or is locked due to 2PL
         """
-        pass
+        try:
+            # Locate the RID via the primary key
+            rid_list = self.table.index.locate(self.table.key, primary_key)
+            if not rid_list:
+                return False  # Record not found
+
+            rid = rid_list[0]
+            self.table.delete(rid)
+            return True
+        except Exception:
+            return False
 
     def insert(self, *columns) -> bool:
         """
@@ -32,7 +42,14 @@ class Query:
         # Returns False if insert fails for whatever reason
         """
         schema_encoding = '0' * self.table.num_columns  # TODO: use actual bits
-        pass
+        try:
+            # Create a new Record object
+            record = Record(key=columns[self.table.key], columns=list(columns))
+            # Insert the record into the table
+            error_code = self.table.insert(record)
+            return error_code == 0  # 0 means no error, success
+        except Exception:
+            return False
 
     def select(
         self,
@@ -49,7 +66,24 @@ class Query:
         # Returns False if record locked by TPL
         # Assume that select will never be called on a key that doesn't exist
         """
-        pass
+        try:
+            # Locate records using the index
+            records = self.table.select(search_key, projected_columns_index)
+            if not records:
+                return False
+
+            # Return only the projected columns
+            result = []
+            for record in records:
+                projected_columns = [
+                    record.columns[i] if projected_columns_index[i] == 1 else None
+                    for i in range(self.table.num_columns)
+                ]
+                result.append(Record(record.key, projected_columns))
+
+            return result
+        except Exception:
+            return False
 
     def select_version(self, search_key, search_key_index, projected_columns_index, relative_version):
         """
@@ -62,7 +96,8 @@ class Query:
         # Returns False if record locked by TPL
         # Assume that select will never be called on a key that doesn't exist
         """
-        pass
+        # TODO: Implement version control for historical record versions
+        return False
 
     def update(self, primary_key, *columns) -> bool:
         """
@@ -70,7 +105,17 @@ class Query:
         # Returns True if update is succesful
         # Returns False if no records exist with given key or if the target record cannot be accessed due to 2PL locking
         """
-        pass
+        try:
+            # Locate the RID via the primary key
+            rid_list = self.table.index.locate(self.table.key, primary_key)
+            if not rid_list:
+                return False  # Record not found
+
+            rid = rid_list[0]
+            self.table.update(rid, list(columns))
+            return True
+        except Exception:
+            return False
 
     def sum(self, start_range, end_range, aggregate_column_index):
         """
@@ -81,7 +126,18 @@ class Query:
         # Returns the summation of the given range upon success
         # Returns False if no record exists in the given range
         """
-        pass
+        try:
+            total_sum = 0
+            for key in range(start_range, end_range + 1):
+                records = self.select(key, self.table.key, [1] * self.table.num_columns)
+                if records:
+                    for record in records:
+                        total_sum += record.columns[aggregate_column_index]
+                else:
+                    return False  # No records found in the range
+            return total_sum
+        except Exception:
+            return False
 
     def sum_version(self, start_range, end_range, aggregate_column_index, relative_version):
         """
@@ -93,7 +149,8 @@ class Query:
         # Returns the summation of the given range upon success
         # Returns False if no record exists in the given range
         """
-        pass
+        # TODO: Implement version control for historical record versions
+        return False
 
     def increment(self, key, column):
         """
