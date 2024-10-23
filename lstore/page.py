@@ -1,4 +1,4 @@
-import config
+from lstore import config
 
 class Page:
 

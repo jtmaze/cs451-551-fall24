@@ -3,15 +3,14 @@ from typing import Literal
 # TODO: For LRU cache, but large memory footprint
 from collections import OrderedDict, namedtuple
 
-from storage.bufferpool import Bufferpool
-from storage.disk import Disk
-from storage.rid import RID, rid_generator
+from lstore.storage.bufferpool import Bufferpool
+from lstore.storage.record_index import RecordIndex
+from lstore.storage.disk import Disk
+from lstore.storage.rid import RID, rid_generator
 
-from table import Record, MetaCol
-from page import Page
-
-RecordIndex = namedtuple("RecordIndex", ["page_id", "offset"])
-
+from lstore.storage.record import Record
+from lstore.storage.meta_col import MetaCol
+from lstore.page import Page
 
 class Buffer:
     """

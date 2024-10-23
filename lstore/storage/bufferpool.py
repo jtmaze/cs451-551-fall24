@@ -1,13 +1,14 @@
 import time
 from collections import OrderedDict
 
-from table import Record, MetaCol
-from storage.rid import RID
-from storage.buffer import RecordIndex
+from lstore.storage.record import Record
+from lstore.storage.meta_col import MetaCol
+from lstore.storage.rid import RID
+from lstore.storage.record_index import RecordIndex
 
-import config
+from lstore import config
 
-from page import Page
+from lstore.page import Page
 
 
 class Bufferpool:

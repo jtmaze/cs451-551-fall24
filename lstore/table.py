@@ -1,37 +1,8 @@
 from typing import Literal
 
-from enum import Enum
-
-import config
-
 from lstore.index import Index
-from storage.buffer import Buffer
-
-
-class MetaCol(Enum):
-    INDIR = 0      # Base: RID of latest tail; Tail: RID of prev
-    RID = 1        # Record ID (and index/location/hashable in page directory)
-    TIMESTAMP = 2  # Timestamp for both base and tail record
-    SCHEMA = 3     # Bits representing cols, 1s where updated
-
-    COL_COUNT = 4  # Number of metadata columns
-
-
-class Record:
-    """
-    Data record (not metadata). RID gets populated by page directory.
-    :param rid:
-    :param key:
-    :param columns: Array of data values
-    """
-
-    def __init__(self, key, columns, rid=None):
-        self.key = key
-        self.columns = columns
-
-        self.rid = rid
-
-
+from lstore.storage.buffer import Buffer
+from lstore.storage.record import Record
 class Table:
     """
     :param name:         # Table name

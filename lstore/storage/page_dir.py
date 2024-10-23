@@ -7,11 +7,12 @@ from collections import namedtuple
 
 import itertools # Fast column projection with compress
 
-from storage.disk import Disk
-from storage.rid import RID, rid_generator
+from lstore.storage.disk import Disk
+from lstore.storage.rid import RID, rid_generator
 
-from table import Record, MetaCol
-from page import Page
+from lstore.page import Page
+from lstore.storage.record import Record
+from lstore.storage.meta_col import MetaCol
 
 
 class PageDirectory:
