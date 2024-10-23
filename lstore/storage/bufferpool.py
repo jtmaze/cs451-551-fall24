@@ -1,14 +1,24 @@
 from collections import OrderedDict
+from table import MetaColumn
+
+from page import Page
 
 class Bufferpool:
     """
     A simple bufferpool that uses a hash table to store pages in memory,
     using RIDs (Record IDs) as keys.
     """
-    def __init__(self, max_size=None):
-        # Max buffer size (optional), could be useful for future use in eviction policy
-        self.max_size = max_size
-        self.pages = OrderedDict()
+    def __init__(self, num_columns, buffer_size):
+        self.num_columns = num_columns
+        self.buffer_size = buffer_size
+
+        # Maps page id -> page for each column (including metadata)
+        self.pages: list[OrderedDict[int, Page]] = [
+            [OrderedDict()] for _ in range(MetaColumn.COLUMN_COUNT + num_columns)
+        ]
+
+    def write(col, val):
+        pass
 
     def get_page(self, rid):
         """

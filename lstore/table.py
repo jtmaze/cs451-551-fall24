@@ -1,15 +1,18 @@
-from lstore.index import Index
-from time import time
+from enum import Enum
 
 import config
 
-from lstore.page import Page
-from storage.page_dir import PageDirectory
+from lstore.index import Index
+from storage.buffer import Buffer
 
-INDIRECTION_COLUMN = 0  # Base: RID of latest tail; Tail: RID of prev
-RID_COLUMN = 1  # Record ID (and index/location/hashable in page directory)
-TIMESTAMP_COLUMN = 2  # Timestamp for both base and tail record
-SCHEMA_ENCODING_COLUMN = 3  # Bits representing cols, 1s where updated
+
+class MetaColumn(Enum):
+    INDIRECTION = 0      # Base: RID of latest tail; Tail: RID of prev
+    RID = 1              # Record ID (and index/location/hashable in page directory)
+    TIMESTAMP = 2        # Timestamp for both base and tail record
+    SCHEMA_ENCODING = 3  # Bits representing cols, 1s where updated
+
+    COLUMN_COUNT = 4  # Number of metadata columns
 
 
 class Record:
@@ -43,7 +46,7 @@ class Table:
         self.key = key
 
         # Given RID, returns records (checks bufferpool first)
-        self.page_directory = PageDirectory(
+        self.buffer = Buffer(
             num_columns=num_columns,
             buffer_size=config.MAX_BUFFER_SIZE,  # None -> uncapped
         )
@@ -56,9 +59,8 @@ class Table:
 
     def insert(self, record: Record) -> int:
         """
-        Given a new Record with a key and columns filled, populates the rid
-        field and stores the record in pages accessed through the updated
-        directory.
+        Given a new Record with a key and columns filled, attempts to insert
+        the record through the page directory and populates the RID field.
 
         Returns an error code as an integer:
             0: No error
@@ -66,22 +68,22 @@ class Table:
             2: Duplicate RID
         """
         try:
-            # Insert a record, directory will populate the RID field (and return it)
-            rid = self.page_directory.insert_record(record)
+            # Insert a record, directory will return its new RID value
+            record.rid = self.buffer.insert_record(record)
         except KeyError as a:
-            print(f"Can't insert record '{record.rid}' as it already exists")
+            print(f"Can't insert record '{record.key}' as it already exists")
             return 2
         except Exception as e:
             # This catch-all error should be last
-            print(f"Error inserting record '{record.rid}'")
+            print(f"Error inserting record '{record.key}'")
             return 1
 
         # Optionally update the index (this could be more sophisticated based on your needs)
-        self.index.create_index(self.key, rid)
+        self.index.create_index(self.key, record.rid)
 
         return 0
 
-    def select(self, key, columns=None) -> list[Record]:
+    def select(self, key, columns) -> list[Record]:
         """
         Select records based on the primary key. Use the index for fast lookup.
         """
@@ -90,7 +92,7 @@ class Table:
         result = []
         for rid in rid_list:
             try:
-                record: Record = self.page_directory.get_record(rid, columns)
+                record: Record = self.buffer.get_record(rid, columns)
             except KeyError as e:
                 print(f"Failed to find rid={rid}")
 
@@ -102,7 +104,7 @@ class Table:
         """
         Updates the record with the given RID.
         """
-        page = self.page_directory.get_page(rid)
+        page = self.buffer.get_page(rid)
 
         if page:
             page.update(rid, updated_values)
@@ -111,7 +113,14 @@ class Table:
         """
         Deletes the record with the given RID by marking it invalid in the bufferpool.
         """
-        page = self.page_directory.get_page(rid)
+        page = self.buffer.get_page(rid)
         if page:
             page.invalidate(rid)
-            self.page_directory.add_page(rid, page)
+            self.buffer.add_page(rid, page)
+
+    def __del__(self):
+        """
+        Table destructor. Writes pages only in memory to disk.
+        """
+        # TODO: Write buffer pages to disk
+        pass
