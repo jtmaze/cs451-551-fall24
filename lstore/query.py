@@ -41,10 +41,9 @@ class Query:
         # Return True upon succesful insertion
         # Returns False if insert fails for whatever reason
         """
-        schema_encoding = '0' * self.table.num_columns  # TODO: use actual bits
         try:
             # Create a new Record object
-            record = Record(key=columns[self.table.key], columns=list(columns))
+            record = Record(key=columns[self.table.key], columns=columns)
             # Insert the record into the table
             error_code = self.table.insert(record)
             return error_code == 0  # 0 means no error, success

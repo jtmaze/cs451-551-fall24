@@ -20,10 +20,10 @@ class Record:
     Data record (not metadata). RID gets populated by page directory.
     :param rid:
     :param key:
-    :param columns:
+    :param columns: Tuple of data values
     """
 
-    def __init__(self, key, columns):
+    def __init__(self, key, columns: tuple):
         self.rid = None
 
         self.key = key
@@ -33,7 +33,7 @@ class Record:
 class Table:
     """
     :param name:         # Table name
-    :param num_columns:  # Number of columns: all columns are integer
+    :param num_columns:  # Number of DATA columns (all columns are integer)
     :param key:          # Index of table key in columns (ie primary key, ex 2 if 3rd col)
     """
 
@@ -45,11 +45,8 @@ class Table:
         self.num_columns = num_columns
         self.key = key
 
-        # Given RID, returns records (checks bufferpool first)
-        self.buffer = Buffer(
-            num_columns=num_columns,
-            buffer_size=config.MAX_BUFFER_SIZE,  # None -> uncapped
-        )
+        # Given RID, returns records (checks bufferpool before disk)
+        self.buffer = Buffer(num_columns)
 
         # Index for faster querying on primary key and possibly other columns
         self.index = Index(self)
@@ -65,14 +62,10 @@ class Table:
         Returns an error code as an integer:
             0: No error
             1: Unspecified error
-            2: Duplicate RID
         """
         try:
             # Insert a record, directory will return its new RID value
             record.rid = self.buffer.insert_record(record)
-        except KeyError as a:
-            print(f"Can't insert record '{record.key}' as it already exists")
-            return 2
         except Exception as e:
             # This catch-all error should be last
             print(f"Error inserting record '{record.key}'")
