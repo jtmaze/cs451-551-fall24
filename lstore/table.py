@@ -1,3 +1,5 @@
+from typing import Literal
+
 from enum import Enum
 
 import config
@@ -6,13 +8,13 @@ from lstore.index import Index
 from storage.buffer import Buffer
 
 
-class MetaColumn(Enum):
-    INDIRECTION = 0      # Base: RID of latest tail; Tail: RID of prev
-    RID = 1              # Record ID (and index/location/hashable in page directory)
-    TIMESTAMP = 2        # Timestamp for both base and tail record
-    SCHEMA_ENCODING = 3  # Bits representing cols, 1s where updated
+class MetaCol(Enum):
+    INDIR = 0      # Base: RID of latest tail; Tail: RID of prev
+    RID = 1        # Record ID (and index/location/hashable in page directory)
+    TIMESTAMP = 2  # Timestamp for both base and tail record
+    SCHEMA = 3     # Bits representing cols, 1s where updated
 
-    COLUMN_COUNT = 4  # Number of metadata columns
+    COL_COUNT = 4  # Number of metadata columns
 
 
 class Record:
@@ -20,14 +22,14 @@ class Record:
     Data record (not metadata). RID gets populated by page directory.
     :param rid:
     :param key:
-    :param columns: Tuple of data values
+    :param columns: Array of data values
     """
 
-    def __init__(self, key, columns: tuple):
-        self.rid = None
-
+    def __init__(self, key, columns, rid=None):
         self.key = key
         self.columns = columns
+
+        self.rid = rid
 
 
 class Table:
@@ -46,7 +48,7 @@ class Table:
         self.key = key
 
         # Given RID, returns records (checks bufferpool before disk)
-        self.buffer = Buffer(num_columns)
+        self.buffer = Buffer(self)
 
         # Index for faster querying on primary key and possibly other columns
         self.index = Index(self)
@@ -76,16 +78,17 @@ class Table:
 
         return 0
 
-    def select(self, key, columns) -> list[Record]:
+    def select(self, search_key, search_key_idx, proj_col_idx: list[Literal[0, 1]]) -> list[Record]:
         """
         Select records based on the primary key. Use the index for fast lookup.
         """
-        rid_list = self.index.locate(self.key, key)
+        # Get rid (point query) or rids (range query) via index
+        rid_list = self.index.locate(self.key, search_key)
 
         result = []
         for rid in rid_list:
             try:
-                record: Record = self.buffer.get_record(rid, columns)
+                record: Record = self.buffer.get_record(rid, proj_col_idx)
             except KeyError as e:
                 print(f"Failed to find rid={rid}")
 

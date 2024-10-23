@@ -22,7 +22,7 @@ class Page:
         # TODO: Return offset
         return None
         
-    def read(self, rid):
+    def read(self, offset):
         raise NotImplementedError()
     
     def update(self, rid, updated_values):

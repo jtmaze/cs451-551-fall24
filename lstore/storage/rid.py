@@ -16,7 +16,7 @@ Create an RID 'class' (not instance) as a named tuple.
 This offers the benefits of classes with less overhead. Importantly, named
 tuples are hashable and can be used.
 """
-RID = namedtuple("RID", ["volume_id", "page_id", "offset", "timestamp"])
+RID = namedtuple("RID", ["timestamp", "volume_id", "page_id", "offset"])
 
 
 def rid_generator() -> Generator[RID, None, None]:
@@ -31,6 +31,6 @@ def rid_generator() -> Generator[RID, None, None]:
     offset = 0
 
     while True:
-        yield RID(volume_id, page_id, offset, time.time())
+        yield RID(time.time(), volume_id, page_id, offset)
         page_id += 1
         offset += 1

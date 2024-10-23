@@ -1,33 +1,33 @@
-from typing import Literal, Callable
+from typing import Literal
 
-from collections import OrderedDict  # TODO: For LRU cache, but large memory footprint
-
-import itertools # Fast column projection with compress
+# TODO: For LRU cache, but large memory footprint
+from collections import OrderedDict, namedtuple
 
 from storage.bufferpool import Bufferpool
 from storage.disk import Disk
 from storage.rid import RID, rid_generator
 
-from table import Record
+from table import Record, MetaCol
 from page import Page
 
+RecordIndex = namedtuple("RecordIndex", ["page_id", "offset"])
 
 class Buffer:
     """
     """
 
-    def __init__(self, num_columns: int) -> None:
-        self.num_columns: int = num_columns
+    def __init__(self, table) -> None:
+        self.table = table
 
         self._rid_gen = rid_generator()
 
         # In memory -------------------
 
         # Maps RIDs to (logical page ID, offset) pairs per column. Ordered by staleness
-        self.page_dir: OrderedDict[RID, list[Bufferpool.RecordIndex]] = OrderedDict()
+        self.page_dir: OrderedDict[RID, list[RecordIndex]] = OrderedDict()
 
         # Maps (logical page id->page) for each column (including metadata)
-        self.bufferpool = Bufferpool(num_columns)
+        self.bufferpool = Bufferpool(self.table)
 
         # Disk ------------------------
 
@@ -36,14 +36,21 @@ class Buffer:
     def insert_record(self, record: Record) -> RID:
         rid: RID = next(self._rid_gen)
 
+        # Write and insert record indices per each column into page dir
         self.page_dir[rid] = self.bufferpool.write(rid, record.columns)
 
-    def get_record(self, rid: RID, cols: list[Literal[0, 1]]) -> Record | None:
-        # Get projection of (page ID, offset) pairs for cols from page_dir
-        record_indices = itertools.compress(self.page_dir[rid], cols)
+        return rid
+
+    def get_record(self,
+        rid: RID,
+        proj_col_idx: list[Literal[0, 1]],
+    ) -> Record | None:
+        record_indices = self.page_dir[rid]
+
+        return self.bufferpool.read(rid, proj_col_idx, record_indices)
 
     def get_page(self, rid, cols=None) -> Page | None:
-        """
+        """OLD!!!!!
         """
         # Check buffer
         page = self.bufferpool.get_page(rid)

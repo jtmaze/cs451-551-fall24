@@ -1,23 +1,25 @@
 import time
-from collections import OrderedDict, namedtuple
+from collections import OrderedDict
 
-from table import MetaColumn
+from table import Record, MetaCol
 from storage.rid import RID
+from storage.buffer import RecordIndex
 
 import config
 
 from page import Page
+
 
 class Bufferpool:
     """
     A simple bufferpool that uses a hash table to store pages in memory,
     using RIDs (Record IDs) as keys.
     """
-    RecordIndex = namedtuple("RecordIndex", ["page_id", "offset"])
 
-    def __init__(self, num_columns: int):
-        self.num_columns: int = num_columns
-        self.total_columns: int = MetaColumn.COLUMN_COUNT + num_columns
+    def __init__(self, table):
+        self.table = table
+
+        self.total_columns: int = MetaCol.COL_COUNT + self.table.num_columns
 
         self.curr_page_id: int = 0  # Total pages created in memory
         self.page_count: int = 0    # Current number of pages
@@ -35,38 +37,51 @@ class Bufferpool:
         Returns a list of RecordIndex objects to be used as values in the
         page directory.
         """
-        page_dir_entry = []
+        record_indices = []
 
-        page_dir_entry.append(self._write_val(MetaColumn.INDIRECTION, 0))
-        page_dir_entry.append(self._write_val(MetaColumn.RID, rid))
-        page_dir_entry.append(self._write_val(MetaColumn.TIMESTAMP, time.now()))
-        page_dir_entry.append(self._write_val(MetaColumn.SCHEMA_ENCODING, 0))
+        # Write metadata, saving record indices per column
+        record_indices.append(self._write_val(MetaCol.INDIR, 0))
+        record_indices.append(self._write_val(MetaCol.RID, rid))
+        record_indices.append(self._write_val(MetaCol.TIMESTAMP, time.now()))
+        record_indices.append(self._write_val(MetaCol.SCHEMA, 0))
 
-        for i in range(MetaColumn.COLUMN_COUNT, self.total_columns):
-            page_dir_entry.append(self._write_val(i, columns[i]))
+        # Write data, saving record indices per remaining columns
+        for i in range(MetaCol.COL_COUNT, self.total_columns):
+            record_indices.append(self._write_val(i, columns[i]))
 
-        return page_dir_entry
+        # Return indices to be stored as values in page directory
+        return record_indices
 
-    def add_page(self, rid, page):
-        """OLD!!!!
-        Adds a page to the bufferpool and associates it with the given RID.
-        """
-        # If page already in buffer, move to end of queue
-        if rid in self.pages:
-            self.pages.move_to_end(rid)
+    def read(self, rid: RID, proj_col_idx, record_indices) -> Record:
+        schema_encoding = self._read_page(
+            MetaCol.SCHEMA, record_indices[MetaCol.SCHEMA])
 
-        self.pages[rid] = page
+        # If a column has tail records, switch to cumulative updated tail record
+        if schema_encoding:
+            tail_rid = self._read_page(
+                MetaCol.INDIR, record_indices[MetaCol.INDIR])
+            record_indices = self.page_dir[tail_rid]
 
-        # Remove oldest if buffer full (first in ordered dict)
-        if self.max_size and len(self.pages) > self.max_size:
-            self.pages.popitem(last=False)
+        ##########
 
-    def remove_page(self, rid):
-        """OLD!!!!!!
-        Removes a page from the bufferpool.
-        """
-        if rid in self.pages:
-            del self.pages[rid]
+        data_indices = record_indices[MetaCol.COL_COUNT:]
+
+        # Get enumerated projection of (page ID, offset) pairs for cols from page_dir
+        #   ex. record index = [(p_0, o_0), (p_1, o_1), (p_2, o_2)]
+        #       proj_col_idx = [0, 1, 1]
+        #       --------------------------
+        #       record_indices = [(1, (p_1, o_1)), (2, (p_2, o_2))]
+        data_indices: list[tuple[int, RecordIndex]] = [
+            (col_idx, r_idx) for col_idx, r_idx in enumerate(data_indices) if proj_col_idx[col_idx]
+        ]
+
+        ############
+
+        columns = []
+        for col_idx, r_idx in data_indices:
+            columns.append(self._read_page(col_idx + MetaCol.COL_COUNT, r_idx))
+
+        return Record(self.table.key, columns, rid)
 
     # Helpers ------------------------
 
@@ -92,9 +107,17 @@ class Bufferpool:
 
             if self.max_buffer_size and self.page_count > self.max_buffer_size:
                 # TODO: handle full buffer
-                #self.page_count -= 1
-                pass
+                # self.page_count -= 1
+                raise NotImplementedError(
+                    "Max buffer size specified, but not implemented yet")
 
         offset = page.write(val)
 
-        return Bufferpool.RecordIndex(page.id, offset)
+        return RecordIndex(page.id, offset)
+
+    def _read_page(self, col: int, r_idx: RecordIndex):
+        """
+        Reads a value from a page given a column (including metadata cols)
+        and a RecordIndex.
+        """
+        return self.pages[col][r_idx.page_id].read(r_idx.offset)

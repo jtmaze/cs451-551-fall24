@@ -66,21 +66,28 @@ class Query:
         # Assume that select will never be called on a key that doesn't exist
         """
         try:
-            # Locate records using the index
-            records = self.table.select(search_key, projected_columns_index)
+            # Get projected list of records
+            records = self.table.select(
+                search_key,
+                search_key_index,
+                projected_columns_index,
+            )
+
             if not records:
                 return False
+            
+            return records
 
             # Return only the projected columns
-            result = []
-            for record in records:
-                projected_columns = [
-                    record.columns[i] if projected_columns_index[i] == 1 else None
-                    for i in range(self.table.num_columns)
-                ]
-                result.append(Record(record.key, projected_columns))
-
-            return result
+            # result = []
+            # for record in records:
+            #     projected_columns = [
+            #         record.columns[i] if projected_columns_index[i] == 1 else None
+            #         for i in range(self.table.num_columns)
+            #     ]
+            #     result.append(Record(record.key, projected_columns))
+            
+            # return result
         except Exception:
             return False
 

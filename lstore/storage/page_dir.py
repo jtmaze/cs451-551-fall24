@@ -8,7 +8,7 @@ import itertools # Fast column projection with compress
 from storage.disk import Disk
 from storage.rid import RID, rid_generator
 
-from table import Record, MetaColumn
+from table import Record, MetaCol
 from page import Page
 
 
@@ -31,7 +31,7 @@ class PageDirectory:
 
         # 2d list of pages for each column (including metadata)
         self.bufferpool: list[OrderedDict[PageDirectory.PageID, Page]] = [
-            [OrderedDict()] for _ in range(MetaColumn.COLUMN_COUNT + num_columns)
+            [OrderedDict()] for _ in range(MetaCol.COL_COUNT + num_columns)
         ]
 
         # Disk ------------------------
