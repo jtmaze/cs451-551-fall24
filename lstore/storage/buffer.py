@@ -12,6 +12,7 @@ from page import Page
 
 RecordIndex = namedtuple("RecordIndex", ["page_id", "offset"])
 
+
 class Buffer:
     """
     """
@@ -41,29 +42,16 @@ class Buffer:
 
         return rid
 
-    def get_record(self,
+    def update_record(self, rid, columns):
+        tail_rid: RID = next(self._rid_gen)
+
+        self.page_dir[tail_rid] = self.bufferpool.update(rid, tail_rid, columns)
+
+    def get_record(
+        self,
         rid: RID,
         proj_col_idx: list[Literal[0, 1]],
     ) -> Record | None:
         record_indices = self.page_dir[rid]
 
         return self.bufferpool.read(rid, proj_col_idx, record_indices)
-
-    def get_page(self, rid, cols=None) -> Page | None:
-        """OLD!!!!!
-        """
-        # Check buffer
-        page = self.bufferpool.get_page(rid)
-
-        # Go to persistent memory if not in buffer
-        if page is None:
-            page = self.disk.get_page(rid)
-            if page:
-                self.bufferpool.add_page(rid, page)
-
-        return page
-
-    def add_page(self, rid, page):
-        self.disk.add_page(rid, page)
-
-        self.bufferpool.add_page(rid, page)

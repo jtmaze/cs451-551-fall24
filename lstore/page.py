@@ -25,7 +25,7 @@ class Page:
     def read(self, offset):
         raise NotImplementedError()
     
-    def update(self, rid, updated_values):
+    def update(self, val, offset):
         raise NotImplementedError()
         
     def invalidate(self, rid):

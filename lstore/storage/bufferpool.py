@@ -40,7 +40,7 @@ class Bufferpool:
         record_indices = []
 
         # Write metadata, saving record indices per column
-        record_indices.append(self._write_val(MetaCol.INDIR, 0))
+        record_indices.append(self._write_val(MetaCol.INDIR, rid))
         record_indices.append(self._write_val(MetaCol.RID, rid))
         record_indices.append(self._write_val(MetaCol.TIMESTAMP, time.now()))
         record_indices.append(self._write_val(MetaCol.SCHEMA, 0))
@@ -52,15 +52,66 @@ class Bufferpool:
         # Return indices to be stored as values in page directory
         return record_indices
 
+    def update(self, rid, tail_rid, columns):
+        tail_indices = []
+
+        # Indirection -----------------
+
+        # Set new tail indir to prev tail rid and base indir to new rid
+        base_indices = self.table.buffer.page_dir[rid]
+        prev_rid = self._read_page(
+            MetaCol.INDIR, base_indices[MetaCol.INDIR]
+        )
+        tail_indices.append(self._write_val(MetaCol.INDIR, prev_rid))
+        self._overwrite_val(rid, MetaCol.INDIR, tail_rid)
+
+        # RID & Timestamp -------------
+
+        tail_indices.append(self._write_val(MetaCol.RID, tail_rid))
+        tail_indices.append(self._write_val(MetaCol.TIMESTAMP, time.now()))
+
+        # Schema encoding & data ------
+
+        schema_encoding = self._read_page(
+            MetaCol.SCHEMA, base_indices[MetaCol.SCHEMA]
+        )
+
+        # Get record indices for previous tail record if cumulative updates
+        if config.CUMULATIVE_UPDATE:
+            prev_indices = self.table.buffer.page_dir[prev_rid]
+
+        # Go through columns while updating schema encoding and data
+        for data_col, val in enumerate(columns):
+            real_col = MetaCol.COL_COUNT + data_col
+
+            if val is not None:
+                # Update schema by setting appropriate bit to 1
+                schema_encoding = schema_encoding | (1 << data_col)
+            elif config.CUMULATIVE_UPDATE:
+                # Get previous value if cumulative
+                val = self._read_page(real_col, prev_indices[real_col])
+            
+            tail_indices.append(self._write_val(real_col, val))
+
+        # Write both base and new tail record schema encoding
+        tail_indices.append(self._write_val(MetaCol.SCHEMA, schema_encoding))
+        self._overwrite_val(rid, MetaCol.SCHEMA, schema_encoding)
+
+        return tail_indices
+
     def read(self, rid: RID, proj_col_idx, record_indices) -> Record:
         schema_encoding = self._read_page(
             MetaCol.SCHEMA, record_indices[MetaCol.SCHEMA])
 
-        # If a column has tail records, switch to cumulative updated tail record
+        # If a column has tail records, get proper record indices
         if schema_encoding:
-            tail_rid = self._read_page(
-                MetaCol.INDIR, record_indices[MetaCol.INDIR])
-            record_indices = self.page_dir[tail_rid]
+            if config.CUMULATIVE_UPDATE:
+                tail_rid = self._read_page(
+                    MetaCol.INDIR, record_indices[MetaCol.INDIR])
+                record_indices = self.page_dir[tail_rid]
+            else:
+                raise NotImplementedError(
+                    "Noncumulative update not finished, set config.CUMULATIVE_UPDATE to True")
 
         ##########
 
@@ -114,6 +165,11 @@ class Bufferpool:
         offset = page.write(val)
 
         return RecordIndex(page.id, offset)
+
+    def _overwrite_val(self, rid, col, val):
+        r_idx: RecordIndex = self.table.buffer.page_dir[rid][col]
+
+        self.pages[col][r_idx.page_id].update(val, r_idx.offset)
 
     def _read_page(self, col: int, r_idx: RecordIndex):
         """

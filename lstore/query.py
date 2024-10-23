@@ -118,7 +118,7 @@ class Query:
                 return False  # Record not found
 
             rid = rid_list[0]
-            self.table.update(rid, list(columns))
+            self.table.update(rid, columns)
             return True
         except Exception:
             return False

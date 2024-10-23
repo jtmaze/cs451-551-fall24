@@ -1,3 +1,5 @@
+"""WARNING: PRETTY MUCH REPLACED BY buffer.py, WILL LIKELY DELETE SOON"""
+
 from typing import Literal
 
 from collections import OrderedDict

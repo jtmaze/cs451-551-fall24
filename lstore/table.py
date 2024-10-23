@@ -96,14 +96,13 @@ class Table:
 
         return result
 
-    def update(self, rid, updated_values):
+    def update(self, rid, columns):
         """
-        Updates the record with the given RID.
+        Updates the record with the given RID. This updates the base record's
+        schema encoding and indirection pointer to point to the latest tail
+        record, but does not alter its data.
         """
-        page = self.buffer.get_page(rid)
-
-        if page:
-            page.update(rid, updated_values)
+        self.buffer.update_record(rid, columns)
 
     def delete(self, rid):
         """
