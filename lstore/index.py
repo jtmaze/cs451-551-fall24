@@ -13,28 +13,50 @@ class Index:
     def __init__(self, num_columns):
         # One index for each table. All our empty initially.
         self.indices = [None for _ in range(num_columns)]
-        pass
 
     def locate(self, column, value):
         """
         # returns the location of all records with the given value on column "column"
         """
-        pass
+        if self.indices[column] is None:
+            # If no index exists, return an empty list
+            return []
+
+        # If an index exists, use it to look up the RIDs
+        return self.indices[column].get(value, [])
 
     def locate_range(self, begin, end, column):
         """
         # Returns the RIDs of all records with values in column "column" between "begin" and "end"
         """
-        pass
+        if self.indices[column] is None:
+            return []
+
+        # Collect all RIDs for values within the specified range
+        result = []
+        for value in range(begin, end + 1):  # Assuming integer range for simplicity
+            result.extend(self.indices[column].get(value, []))
+        return result
 
     def create_index(self, column_number):
         """
         # optional: Create index on specific column
         """
-        pass
+        if self.indices[column_number] is None:
+            # Create a new dictionary to serve as the index for this column
+            self.indices[column_number] = {}
+
+            # Assuming that the table is accessible through a reference (e.g., self.table)
+            for rid, record in enumerate(self.table_data()):  # Replace with actual record retrieval method
+                column_value = record.columns[column_number]
+                if column_value in self.indices[column_number]:
+                    self.indices[column_number][column_value].append(rid)
+                else:
+                    self.indices[column_number][column_value] = [rid]
 
     def drop_index(self, column_number):
         """
         # optional: Drop index of specific column
         """
-        pass
+        if self.indices[column_number] is not None:
+            self.indices[column_number] = None
