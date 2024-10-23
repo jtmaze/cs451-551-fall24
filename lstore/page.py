@@ -2,7 +2,8 @@ import config
 
 class Page:
 
-    def __init__(self):
+    def __init__(self, id):
+        self.id = id
         self.num_records = 0
         self.data = bytearray(config.PAGE_SIZE)
 
@@ -18,10 +19,13 @@ class Page:
             # If the page is full, raise an exception
             raise Exception("Page is full. Cannot write more records.")
         
-    def read(self, rid):
+        # TODO: Return offset
+        return None
+        
+    def read(self, offset):
         raise NotImplementedError()
     
-    def update(self, rid, updated_values):
+    def update(self, val, offset):
         raise NotImplementedError()
         
     def invalidate(self, rid):

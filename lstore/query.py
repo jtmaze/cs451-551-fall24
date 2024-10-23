@@ -41,10 +41,9 @@ class Query:
         # Return True upon succesful insertion
         # Returns False if insert fails for whatever reason
         """
-        schema_encoding = '0' * self.table.num_columns  # TODO: use actual bits
         try:
             # Create a new Record object
-            record = Record(key=columns[self.table.key], columns=list(columns))
+            record = Record(key=columns[self.table.key], columns=columns)
             # Insert the record into the table
             error_code = self.table.insert(record)
             return error_code == 0  # 0 means no error, success
@@ -67,21 +66,28 @@ class Query:
         # Assume that select will never be called on a key that doesn't exist
         """
         try:
-            # Locate records using the index
-            records = self.table.select(search_key, projected_columns_index)
+            # Get projected list of records
+            records = self.table.select(
+                search_key,
+                search_key_index,
+                projected_columns_index,
+            )
+
             if not records:
                 return False
+            
+            return records
 
             # Return only the projected columns
-            result = []
-            for record in records:
-                projected_columns = [
-                    record.columns[i] if projected_columns_index[i] == 1 else None
-                    for i in range(self.table.num_columns)
-                ]
-                result.append(Record(record.key, projected_columns))
-
-            return result
+            # result = []
+            # for record in records:
+            #     projected_columns = [
+            #         record.columns[i] if projected_columns_index[i] == 1 else None
+            #         for i in range(self.table.num_columns)
+            #     ]
+            #     result.append(Record(record.key, projected_columns))
+            
+            # return result
         except Exception:
             return False
 
@@ -112,7 +118,7 @@ class Query:
                 return False  # Record not found
 
             rid = rid_list[0]
-            self.table.update(rid, list(columns))
+            self.table.update(rid, columns)
             return True
         except Exception:
             return False
