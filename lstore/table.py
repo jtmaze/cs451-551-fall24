@@ -22,7 +22,7 @@ class Table:
         self.buffer = Buffer(self)
 
         # Index for faster querying on primary key and possibly other columns
-        self.index = Index(self)
+        self.index = Index(self, key, num_columns)
 
     def __merge(self):
         print("merge is happening")
@@ -44,8 +44,11 @@ class Table:
             print(f"Error inserting record '{record.key}'")
             return 1
 
-        # Optionally update the index (this could be more sophisticated based on your needs)
-        self.index.create_index(self.key, record.rid)
+        # Update primary key's index
+        self.index.insert_val(self.key, record.columns[self.key], record.rid)
+
+        # TODO: Update other indices
+        pass
 
         return 0
 
@@ -54,7 +57,7 @@ class Table:
         Select records based on the primary key. Use the index for fast lookup.
         """
         # Get rid (point query) or rids (range query) via index
-        rid_list = self.index.locate(self.key, search_key)
+        rid_list = self.index.locate(search_key_idx, search_key)
 
         result = []
         for rid in rid_list:

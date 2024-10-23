@@ -7,12 +7,30 @@ this object.
 Indices are usually B-Trees, but other data structures can be used as well.
 """
 
+class DictIndex:
+    def __init__(self):
+        self.data = dict()
+
+    def get(val) -> RID:
+        return self.data[val]
+
+    def get_range():
+        raise NotImplementedError()
+
+    def insert(val, rid):
+        self.data[val] = rid
+
+    def delete(val):
+        del self.data[val]
 
 class Index:
 
-    def __init__(self, num_columns):
+    def __init__(self, key, num_columns):
         # One index for each table. All our empty initially.
         self.indices = [None for _ in range(num_columns)]
+
+        # Populate the index for the primary key
+        self.create_index(key)
 
     def locate(self, column, value):
         """
@@ -44,15 +62,9 @@ class Index:
         """
         if self.indices[column_number] is None:
             # Create a new dictionary to serve as the index for this column
-            self.indices[column_number] = {}
+            self.indices[column_number] = DictIndex()
 
-            # Assuming that the table is accessible through a reference (e.g., self.table)
-            for rid, record in enumerate(self.table_data()):  # Replace with actual record retrieval method
-                column_value = record.columns[column_number]
-                if column_value in self.indices[column_number]:
-                    self.indices[column_number][column_value].append(rid)
-                else:
-                    self.indices[column_number][column_value] = [rid]
+            self._populate_index(column_number)
 
     def drop_index(self, column_number):
         """
@@ -60,3 +72,20 @@ class Index:
         """
         if self.indices[column_number] is not None:
             self.indices[column_number] = None
+
+    def insert_val(self, col_number, val, rid):
+        if self.indices[col_number] is not None:
+            self.indices[col_number].insert(val, rid)
+
+    # Helper ---------------------
+
+    def _populate_index(col_number):
+        """Goes through already data in column and populates index."""
+        pass
+        # Assuming that the table is accessible through a reference (e.g., self.table)
+        # for rid, record in enumerate(self.table_data()):  # Replace with actual record retrieval method
+        #     column_value = record.columns[column_number]
+        #     if column_value in self.indices[column_number]:
+        #         self.indices[column_number][column_value].append(rid)
+        #     else:
+        #         self.indices[column_number][column_value] = [rid]
