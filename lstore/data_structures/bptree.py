@@ -36,20 +36,21 @@ class BPTreeNode:
         else:
             for i in range(len(current_vals)):
                 # First try to insert on lower keys and values
-                if value_insert < current_vals[i] and key_insert < current_keys[i]:
+                if key_insert < current_keys[i]:
                     self.values.insert(i, value_insert)
                     self.keys.insert(i, key_insert)
                     print(f'Key:{key_insert} and RID:{value_insert} inserted on leaf node')
                     return
                 # Then, append on the end of keys and values are greater than the current max
-                elif value_insert > current_vals[i] and key_insert > current_keys[i]: 
+                elif key_insert > current_keys[i]: 
                     self.values.append(value_insert)
                     self.keys.append(key_insert)
                     print(f'Key:{key_insert} and RID:{value_insert} inserted on leaf node')
                     return
                 # Throw an error if the key or RID is already in the node
-                elif value_insert == current_vals[i] or key_insert == current_keys[i]: # Not sure if I shold also check current keys??
-                    print(f'ERROR: Duplicate RID {value_insert} or key {key_insert} Violates L-Store unique RID Constraint')
+                elif key_insert == current_keys[i]: # Not sure if I shold also check current keys??
+                    self.values.append(value_insert)
+                    self.keys.append([key_insert])
                     return
                 # Catch all for unhandled cases (e.g. key_insert < current_keys BUT value_insert > current_vals)
                 else:
@@ -60,6 +61,13 @@ class BPTreeNode:
         current_node = self
         current_vals = self.values
         current_keys = self.keys
+
+        if key in current_keys:
+            index = current_keys.index(key)
+            return current_vals[index]
+        
+        else:
+            print(f'Key:{key} not found in leaf nodes')
 
         pass
     
@@ -194,8 +202,8 @@ order = 4
 bptree = BPTree(order)
 
 # Insert key/value pairs
-keys_to_insert = [10, 20, 5, 6, 12, 30, 7, 17, 50, 53]
-values_to_insert = [100, 200, 50, 60, 120, 300, 70, 170, 500, 520]
+keys_to_insert = [10, 20, 5, 6, 12, 30, 7, 17, 50, 53, 8, 8]
+values_to_insert = [100, 200, 50, 60, 120, 300, 70, 170, 500, 520, 8, 720]
 
 for key, value in zip(keys_to_insert, values_to_insert):
     bptree.insert(key, value)
@@ -204,7 +212,7 @@ for key, value in zip(keys_to_insert, values_to_insert):
 def print_tree(node, level=0):
     indent = '   ' * level
     if node.is_leaf:
-        print(f"{indent}Leaf Node: Keys={node.keys}")
+        print(f"{indent}Leaf Node: Keys={node.keys} and Leaf Values={node.values}")
     else:
         print(f"{indent}Internal Node: Keys={node.keys}")
         for child in node.values:
