@@ -1,4 +1,4 @@
-from typing import Literal,Union
+from typing import Literal
 
 from lstore.table import Table, Record
 from lstore.index import Index
@@ -53,7 +53,7 @@ class Query:
         search_key,
         search_key_index,
         projected_columns_index: list[Literal[0, 1]]
-    ) -> Union[list[Record], bool]:
+    ) -> list[Record] | bool:
         """
         # Read matching record with specified search key
         # :param search_key: the value you want to search based on

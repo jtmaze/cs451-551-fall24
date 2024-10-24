@@ -82,6 +82,11 @@ class Buffer:
 
         :return: Populated Record with data, or None if unsuccessful
         """
-        record_indices: list[RecordIndex] = self.page_dir[rid]
-
-        return self.bufferpool.read(rid, proj_col_idx, record_indices, rel_version)
+        return self.bufferpool.read(rid, proj_col_idx, rel_version)
+    
+    def delete_record(self, rid: RID):
+        """
+        Marks record as deleted by setting base record's indirection to special
+        RID with tombstone == True
+        """
+        self.bufferpool.delete(rid)

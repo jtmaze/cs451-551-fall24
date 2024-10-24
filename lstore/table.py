@@ -85,12 +85,11 @@ class Table:
         result = []
         for rid in rid_list:
             try:
-                record: Record = self.buffer.get_record(
-                    rid, proj_col_idx, rel_version)
-            except KeyError as e:
+                result.append(
+                    self.buffer.get_record(rid, proj_col_idx, rel_version)
+                )
+            except Exception as e:
                 print(f"Failed to find rid={rid}")
-
-            result.append(record)
 
         return result
 
@@ -111,10 +110,7 @@ class Table:
 
         :param rid: RID of record to 'delete'
         """
-        page = self.buffer.get_page(rid)
-        if page:
-            page.invalidate(rid)
-            self.buffer.add_page(rid, page)
+        self.buffer.delete(rid)
 
     def __del__(self):
         """
