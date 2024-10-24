@@ -1,4 +1,4 @@
-from typing import Literal,Union
+from typing import Literal
 
 from lstore.table import Table, Record
 from lstore.index import Index
@@ -42,10 +42,8 @@ class Query:
         # Returns False if insert fails for whatever reason
         """
         try:
-            # Create a new Record object
-            record = Record(key=columns[self.table.key], columns=columns)
             # Insert the record into the table
-            error_code = self.table.insert(record)
+            error_code = self.table.insert(columns)
             return error_code == 0  # 0 means no error, success
         except Exception:
             return False
@@ -55,7 +53,7 @@ class Query:
         search_key,
         search_key_index,
         projected_columns_index: list[Literal[0, 1]]
-    ) -> Union[list[Record], bool]:
+    ) -> list[Record] | bool:
         """
         # Read matching record with specified search key
         # :param search_key: the value you want to search based on
@@ -77,17 +75,6 @@ class Query:
                 return False
             
             return records
-
-            # Return only the projected columns
-            # result = []
-            # for record in records:
-            #     projected_columns = [
-            #         record.columns[i] if projected_columns_index[i] == 1 else None
-            #         for i in range(self.table.num_columns)
-            #     ]
-            #     result.append(Record(record.key, projected_columns))
-            
-            # return result
         except Exception:
             return False
 
@@ -102,8 +89,21 @@ class Query:
         # Returns False if record locked by TPL
         # Assume that select will never be called on a key that doesn't exist
         """
-        # TODO: Implement version control for historical record versions
-        return False
+        try:
+            # Get projected list of records
+            records = self.table.select(
+                search_key,
+                search_key_index,
+                projected_columns_index,
+                relative_version,
+            )
+
+            if not records:
+                return False
+            
+            return records
+        except Exception:
+            return False
 
     def update(self, primary_key, *columns) -> bool:
         """
