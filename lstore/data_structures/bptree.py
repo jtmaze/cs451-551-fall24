@@ -2,73 +2,7 @@
 import math
 import pprint as pp # For debugging, !!! remove later
 
-# %%
-class BPTreeNode:
-    def __init__(self, n):
-       
-        """
-        n: the maximum number of keys in a node
-        """
-
-        self.n = n 
-        self.keys = [] # sorted list of keys
-        self.values = [] # list of list of values (should be RIDs?)
-        self.parent_node = None # Do I need a pointer to back to the parent node?
-        self.forward_key = None # Pointer to the next leaf node
-        self.is_leaf = False # Boolean denoting if the node is a leaf
-
-    def leaf_insert(self, leaf, key_insert, value_insert):
-        """
-        Inserts a key/value pair into a leaf node
-        leaf: Should checks if node is a leaf
-        key_insert: a single key to insert
-        value_insert: a single value (RID) to insert
-        """
-        current_keys = self.keys
-        current_vals = self.values
-        # 1) Leaf node is empty (easy case)
-        if len(current_keys) == 0:
-            self.keys.append(key_insert)
-            self.values.append([value_insert])
-            print(f'Key:{key_insert} and RID:{value_insert} inserted on empty leaf node')
-
-        # 2) Leaf node is not empty
-        else:
-            inserted = False
-            for i in range(len(current_keys)):
-                # First try to insert on lower keys and values
-                if key_insert < current_keys[i]:
-                    self.keys.insert(i, key_insert)
-                    self.values.insert(i, [value_insert])
-                    print(f'Key:{key_insert} and RID:{value_insert} inserted on leaf node')
-                    inserted = True
-                    break
-                
-                elif key_insert == current_keys[i]: # Not sure if I shold also check current keys??
-                    self.values[i].append(value_insert)
-                    print(f'Appening a new value {value_insert} to existing key {key_insert}')
-                    inserted = True
-                    break
-                
-            if not inserted:
-                self.keys.append(key_insert)
-                self.values.append([value_insert])
-                print(f'Key:{key_insert} and RID:{value_insert} inserted on leaf node')
-                return
-
-    def point_query_node(self, key):
-        current_vals = self.values
-        current_keys = self.keys
-
-        if self.is_leaf:
-            for i in range(len(current_keys)):
-                if current_keys[i] == key:
-                    print(f'Key:{key} found in leaf node')
-                    return current_vals[i]
-            print(f'Key:{key} not found in leaf node')
-            return None
-
-
+from bptree_node import BPTreeNode
 
 class BPTree:
     def __init__(self, n):
@@ -83,14 +17,23 @@ class BPTree:
 
     def insert(self, key_insert, value_insert):
         """
-        Inserts a key/value pair into the tree
+        Inserts a key/value pair into the tree and splits if full
         key_insert: a single key to insert
-        value_insert: a single value (RID) to insert
+        value_insert: a single value to insert
         """
-        leaf_node = self.search_node(key_insert) 
-        leaf_node.leaf_insert(leaf_node, key_insert, value_insert) 
-        if len(leaf_node.keys) > self.n - 1: # If the leaf node is full, split the node
+        leaf_node = self.search_node(key_insert) # 1) Find right leaf node
+        leaf_node.leaf_insert(leaf_node, key_insert, value_insert) # 2) Insert key/value pair
+        if len(leaf_node.keys) > self.n - 1: # 3) If full, split the node
             self.split_node(leaf_node)
+
+    def delete(self, key_delete):
+
+        leaf_node = self.search_node(key_delete)
+        leaf_node.leaf_delete(leaf_node, key_delete)
+        
+        if len(leaf_node.keys) < math.ceil(self.n / 2):
+            print('UGHHH doing rebalancing shit later')
+
 
 
     def split_node(self, node_to_split):
@@ -102,39 +45,50 @@ class BPTree:
         new_node.is_leaf = node_to_split.is_leaf
         new_node.parent_node = node_to_split.parent_node 
 
-        mid_index = len(node_to_split.keys) // 2 #
+        mid_index = len(node_to_split.keys) // 2 # Splits full node in half
 
         if node_to_split.is_leaf:
+            # New node takes upper half
             new_node.keys = node_to_split.keys[mid_index:]
             new_node.values = node_to_split.values[mid_index:]
+            # Old node takes the lower half. Facilitates forward pointer!!
             node_to_split.keys = node_to_split.keys[:mid_index]
             node_to_split.values = node_to_split.values[:mid_index]
 
+            # New node (right of old node) takes old node's forward key
             new_node.forward_key = node_to_split.forward_key
+            # Old node (left of new node) point to new node. 
             node_to_split.forward_key = new_node
             
+            # Sepperator is the first key in the new node
             sepperator = new_node.keys[0]
 
-        else:
+        else: # Node to split is internal
             sepperator = node_to_split.keys[mid_index]
 
+            # New node takes upper half with mid_index going to upstream parent
             new_node.keys = node_to_split.keys[mid_index + 1:]
             new_node.values = node_to_split.values[mid_index + 1:]
 
-            node_to_split.keys = node_to_split.keys[:mid_index]
-            node_to_split.values = node_to_split.values[:mid_index + 1]
+            # Old node takes lower half
+            node_to_split.keys = node_to_split.keys[:mid_index] # keys up to mid_index (not included)
+            node_to_split.values = node_to_split.values[:mid_index + 1] # need keys + 1 pointers for children
 
+            # Update the child nodes' parent pointers for new node
             for child in new_node.values:
                 child.parent_node = new_node
 
+        # if node_to_split is the root make a new_root.
         if node_to_split.parent_node is None:
             new_root = BPTreeNode(self.n)
             new_root.is_leaf = False
-            new_root.keys = [sepperator]
-            new_root.values = [node_to_split, new_node]
+            new_root.keys = [sepperator] # New root takes keys from old_node seperator
+            new_root.values = [node_to_split, new_node] # New root points to old_node and new_node further down tree
+            # Assign new parent to downstream nodes
             node_to_split.parent_node = new_root
             new_node.parent_node = new_root
             self.root = new_root
+            print(f'New root created on {new_root.keys}')
 
         else:
             self.insert_at_parent(node_to_split.parent_node, sepperator, new_node)
@@ -145,14 +99,16 @@ class BPTree:
         Inserts a key and child node into the parent node
         """
         index = 0
+        # search for key's place in parent node
         while index < len(parent_node.keys) and parent_node.keys[index] < key_insert:
             index += 1
 
+        # Insert once place is found
         parent_node.keys.insert(index, key_insert)
         parent_node.values.insert(index + 1, child_node)
-
         child_node.parent_node = parent_node
 
+        # Split if parent is full
         if len(parent_node.keys) > self.n - 1:
             self.split_node(parent_node)
 
@@ -160,18 +116,18 @@ class BPTree:
     def search_node(self, key_search):
         """
         Traverses the tree from root-downward until a leaf node is found.
-        key_search: key to search for
+        Returns the leaf node
         """
         current_node = self.root  # Start at the root
 
-        while not current_node.is_leaf:  # Keep going until we reach a leaf
+        while not current_node.is_leaf:  # Keep going until leaf
             i = 0
             # Find the child to follow
             while i < len(current_node.keys) and key_search >= current_node.keys[i]:
                 i += 1
             current_node = current_node.values[i]
 
-        # Once we're at a leaf node, return it
+        # Once at a leaf node, return it
         return current_node
 
     def get_node(self, key_search):
@@ -216,6 +172,8 @@ for key, value in zip(keys_to_insert, values_to_insert):
 
 print_tree(bptree.root)
 
+bptree.delete(key_delete=5)
+
 # %%
 search_key = 8
 test_leaf = bptree.search_node(search_key)
@@ -248,8 +206,8 @@ def make_nonunique_rando(lenght, min, max):
 
 order = 10
 bptree = BPTree(order)
-keys_to_insert = make_nonunique_rando(100, 1, 20)
-values_to_insert = make_unique_rando(100, 1, 1000)
+keys_to_insert = make_nonunique_rando(1000, 1, 20)
+values_to_insert = make_unique_rando(1000, 1000, 100000)
 
 for k, v in zip(keys_to_insert, values_to_insert):
     bptree.insert(k, v)
@@ -260,4 +218,11 @@ search_key = 8
 test_results = bptree.search_node(search_key).point_query_node(search_key)
 print(test_results)
 
+# %%
+
+bptree.delete(key_delete=3)
+# %%
+search_key = 3
+test_results = bptree.search_node(search_key).point_query_node(search_key)
+print(test_results)
 # %%
