@@ -42,10 +42,8 @@ class Query:
         # Returns False if insert fails for whatever reason
         """
         try:
-            # Create a new Record object
-            record = Record(key=columns[self.table.key], columns=columns)
             # Insert the record into the table
-            error_code = self.table.insert(record)
+            error_code = self.table.insert(columns)
             return error_code == 0  # 0 means no error, success
         except Exception:
             return False
