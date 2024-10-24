@@ -18,15 +18,29 @@ class Page:
         else:
             # If the page is full, raise an exception
             raise Exception("Page is full. Cannot write more records.")
-        
-        # TODO: Return offset
-        return None
+
+        # Returning the offset where the value was written
+        return start_index
         
     def read(self, offset):
-        raise NotImplementedError()
+        """
+        Reads a value at the given offset.
+        :param offset: The byte offset where the value starts.
+        :returns: The integer value read from the offset.
+        """
+        # Extract the bytes from the page's data starting at the offset
+        value_bytes = self.data[offset:offset + config.RECORD_SIZE]
+        # Convert the extracted bytes to an integer and return it
+        return int.from_bytes(value_bytes, byteorder='big')
     
     def update(self, val, offset):
-        raise NotImplementedError()
+        """
+        Updates the value at the given offset.
+        :param val: The new value to be written.
+        :param offset: The byte offset where the value should be updated.
+        """
+        # Convert the new value to bytes and overwrite the old data
+        self.data[offset:offset + config.RECORD_SIZE] = val.to_bytes(config.RECORD_SIZE, byteorder='big')
         
     def invalidate(self, rid):
         # TODO: Page 'deletion'
