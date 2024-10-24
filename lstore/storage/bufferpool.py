@@ -91,7 +91,7 @@ class Bufferpool:
             elif config.CUMULATIVE_UPDATE:
                 # Get previous value if cumulative
                 val = self._read_page(real_col, prev_indices[real_col])
-            
+
             tail_indices.append(self._write_val(real_col, val))
 
         # Write both base and new tail record schema encoding
@@ -100,34 +100,29 @@ class Bufferpool:
 
         return tail_indices
 
-    def read(self, rid: RID, proj_col_idx, record_indices) -> Record:
+    def read(
+        self,
+        rid: RID,
+        proj_col_idx,
+        record_indices,
+        rel_version: int | None
+    ) -> Record:
         schema_encoding = self._read_page(
             MetaCol.SCHEMA, record_indices[MetaCol.SCHEMA])
 
-        # If a column has tail records, get proper record indices
+        # If a column has tail records, get record indices for correct version
         if schema_encoding:
-            if config.CUMULATIVE_UPDATE:
-                tail_rid = self._read_page(
-                    MetaCol.INDIR, record_indices[MetaCol.INDIR])
-                record_indices = self.page_dir[tail_rid]
-            else:
-                raise NotImplementedError(
-                    "Noncumulative update not finished, set config.CUMULATIVE_UPDATE to True")
-
-        ##########
-
-        data_indices = record_indices[MetaCol.COL_COUNT:]
+            record_indices = self._get_indices(record_indices, rel_version)
 
         # Get enumerated projection of (page ID, offset) pairs for cols from page_dir
         #   ex. record index = [(p_0, o_0), (p_1, o_1), (p_2, o_2)]
         #       proj_col_idx = [0, 1, 1]
         #       --------------------------
         #       record_indices = [(1, (p_1, o_1)), (2, (p_2, o_2))]
+        data_indices = record_indices[MetaCol.COL_COUNT:]
         data_indices: list[tuple[int, RecordIndex]] = [
             (col_idx, r_idx) for col_idx, r_idx in enumerate(data_indices) if proj_col_idx[col_idx]
         ]
-
-        ############
 
         columns = []
         for col_idx, r_idx in data_indices:
@@ -178,3 +173,26 @@ class Bufferpool:
         and a RecordIndex.
         """
         return self.pages[col][r_idx.page_id].read(r_idx.offset)
+
+    def _get_indices(self, record_indices, rel_version):
+        """
+        Given base record indices, gets record indices for a given relative
+        version. Will always go to most recent tail record (version 0) at
+        least.
+        """
+        if not config.CUMULATIVE_UPDATE:
+            raise NotImplementedError(
+                "Noncumulative update not finished, set config.CUMULATIVE_UPDATE to True")
+        
+        # Will do it at least once since version 0 is newest tail record
+        while rel_version <= 0:
+            # Get previous tail record (or base record). base.indir == base.rid!
+            rid = self._read_page(
+                MetaCol.INDIR, record_indices[MetaCol.INDIR])
+            
+            record_indices = self.page_dir[rid]
+
+            rel_version += 1
+        
+        return record_indices
+    

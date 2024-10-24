@@ -1,7 +1,7 @@
 from typing import Literal
 
 # TODO: For LRU cache, but large memory footprint
-from collections import OrderedDict, namedtuple
+from collections import OrderedDict
 
 from lstore.storage.bufferpool import Bufferpool
 from lstore.storage.record_index import RecordIndex
@@ -9,8 +9,6 @@ from lstore.storage.disk import Disk
 from lstore.storage.rid import RID, rid_generator
 
 from lstore.storage.record import Record
-from lstore.storage.meta_col import MetaCol
-from lstore.page import Page
 
 class Buffer:
     """
@@ -50,7 +48,8 @@ class Buffer:
         self,
         rid: RID,
         proj_col_idx: list[Literal[0, 1]],
+        rel_version: int
     ) -> Record | None:
         record_indices = self.page_dir[rid]
 
-        return self.bufferpool.read(rid, proj_col_idx, record_indices)
+        return self.bufferpool.read(rid, proj_col_idx, record_indices, rel_version)

@@ -3,6 +3,8 @@ from typing import Literal
 from lstore.index import Index
 from lstore.storage.buffer import Buffer
 from lstore.storage.record import Record
+
+
 class Table:
     """
     :param name:         # Table name
@@ -52,7 +54,13 @@ class Table:
 
         return 0
 
-    def select(self, search_key, search_key_idx, proj_col_idx: list[Literal[0, 1]]) -> list[Record]:
+    def select(
+        self,
+        search_key,
+        search_key_idx,
+        proj_col_idx: list[Literal[0, 1]],
+        rel_version: int = 0
+    ) -> list[Record]:
         """
         Select records based on the primary key. Use the index for fast lookup.
         """
@@ -62,7 +70,7 @@ class Table:
         result = []
         for rid in rid_list:
             try:
-                record: Record = self.buffer.get_record(rid, proj_col_idx)
+                record: Record = self.buffer.get_record(rid, proj_col_idx, rel_version)
             except KeyError as e:
                 print(f"Failed to find rid={rid}")
 
