@@ -96,8 +96,7 @@ class Bufferpool:
         # Indirection -----------------
 
         # Set new tail indir to prev tail rid and base indir to new rid
-        base_indices = self._get_base_indices(rid)
-        prev_rid = self._read_meta(base_indices, MetaCol.INDIR)
+        prev_rid = RID(self._read_meta(base_indices, MetaCol.INDIR))
         tail_indices[MetaCol.INDIR] = self._write_val(MetaCol.INDIR, prev_rid)
         self._overwrite_val(rid, MetaCol.INDIR, tail_rid)
 
@@ -160,7 +159,7 @@ class Bufferpool:
             record_indices = self._get_versioned_indices(
                 record_indices, rel_version)
 
-        # Get enumerated projection of (page ID, offset) pairs for cols from page_dir
+        # Get enumerated projection of (page ID, offset) pairs for cols from page dir
         #   ex. record index = [(p_0, o_0), (p_1, o_1), (p_2, o_2)]
         #       proj_col_idx = [0, 1, 1]
         #       --------------------------
@@ -231,7 +230,7 @@ class Bufferpool:
     def _read_meta(self, record_indices, metacol):
         return self._read_val(metacol, record_indices[metacol])
 
-    def _get_base_indices(self, rid):
+    def _get_base_indices(self, rid: RID):
         return self.table.buffer.page_dir[rid]
 
     def _get_versioned_indices(self, record_indices, rel_version):
@@ -245,7 +244,7 @@ class Bufferpool:
         # Will do it at least once since version 0 is newest tail record
         while rel_version <= 0:
             # Get previous tail record (or base record). base.indir == base.rid!
-            rid = self._read_meta(record_indices, MetaCol.INDIR)
+            rid = RID(self._read_meta(record_indices, MetaCol.INDIR))
 
             record_indices = self.table.buffer.page_dir[rid]
 

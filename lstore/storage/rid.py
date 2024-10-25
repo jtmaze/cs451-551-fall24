@@ -7,11 +7,11 @@ hashable for fast buffer access.
 
 from typing import Literal
 
-import time
+import uuid
 
 _RID_BITS = (
     1,   # tombstone
-    48,  # timestamp
+    64,  # UUID
 )
 
 # Bit shift needed to get to field (ie cumulative field offset)
@@ -32,7 +32,7 @@ _FIELD_MASKS = tuple(
 class RID:
 
     def __init__(self, rid_int: int):
-        self.rid = rid_int
+        self._rid = rid_int
 
     @classmethod
     def from_params(cls, tombstone: Literal[0, 1]):
@@ -41,15 +41,19 @@ class RID:
         """
         # Ensure correct amount of bits
         tombstone &= _RID_MASKS[0]
-        ts = int(time.time() * 1000) & _RID_MASKS[1]
+        id = uuid.uuid4().int & _RID_MASKS[1]
 
         # Shift and combine fields into integer
         rid_int = 0
-        for i, field in enumerate((tombstone, ts)):
+        for i, field in enumerate((tombstone, id)):
             rid_int |= (field << _RID_SHIFTS[i])
 
         # Create object and return
         return cls(rid_int)
+    
+    @property
+    def rid(self):
+        return self._rid
 
     @property
     def tombstone(self):
@@ -64,6 +68,10 @@ class RID:
     
     def __hash__(self) -> int:
         return hash(self.rid)
+    
+    def __eq__(self, rhs) -> bool:
+        # Used by dict
+        return self.rid == rhs.rid
     
     @classmethod
     def get_dead_record(cls):
