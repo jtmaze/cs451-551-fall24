@@ -13,7 +13,7 @@ from collections import OrderedDict
 
 from lstore.storage.record import Record
 from lstore.storage.meta_col import MetaCol
-from lstore.storage.rid import RID, DEAD_RECORD_RID
+from lstore.storage.rid import RID
 from lstore.storage.record_index import RecordIndex
 
 from lstore import config
@@ -61,12 +61,13 @@ class Bufferpool:
         record_indices[MetaCol.INDIR] = self._write_val(MetaCol.INDIR, rid)
         record_indices[MetaCol.RID] = self._write_val(MetaCol.RID, rid)
         record_indices[MetaCol.TIME] = self._write_val(
-            MetaCol.TIME, time.now())
+            MetaCol.TIME, self._get_timestamp())
         record_indices[MetaCol.SCHEMA] = self._write_val(MetaCol.SCHEMA, 0)
 
         # Write data, saving record indices per remaining columns
         for i in range(MetaCol.COL_COUNT, self.total_columns):
-            record_indices[i] = self._write_val(i, columns[i])
+            record_indices[i] = self._write_val(
+                i, columns[i - MetaCol.COL_COUNT])
 
         # Return indices to be stored as values in page directory
         return record_indices
@@ -85,7 +86,7 @@ class Bufferpool:
         :param columns: New data values. Vals are none if no update for that col
         """
         self._validate_cumulative_update()
-    
+
         base_indices = self._get_base_indices(rid)
 
         self._validate_not_deleted(rid, base_indices)
@@ -95,15 +96,16 @@ class Bufferpool:
         # Indirection -----------------
 
         # Set new tail indir to prev tail rid and base indir to new rid
-        base_indices = self._get_base_indices(rid)
-        prev_rid = self._read_meta(base_indices, MetaCol.INDIR)
-        tail_indices[MetaCol.INDIR] = self._write_val(MetaCol.INDIR, prev_rid)
+        prev_rid = RID(self._read_meta(base_indices, MetaCol.INDIR))
+        tail_indices[MetaCol.INDIR] = self._write_val(
+            MetaCol.INDIR, prev_rid)
         self._overwrite_val(rid, MetaCol.INDIR, tail_rid)
 
         # RID & Timestamp -------------
 
         tail_indices[MetaCol.RID] = self._write_val(MetaCol.RID, tail_rid)
-        tail_indices[MetaCol.TIME] = self._write_val(MetaCol.TIME, time.now())
+        tail_indices[MetaCol.TIME] = self._write_val(
+            MetaCol.TIME, self._get_timestamp())
 
         # Schema encoding & data ------
 
@@ -158,7 +160,7 @@ class Bufferpool:
             record_indices = self._get_versioned_indices(
                 record_indices, rel_version)
 
-        # Get enumerated projection of (page ID, offset) pairs for cols from page_dir
+        # Get enumerated projection of (page ID, offset) pairs for cols from page dir
         #   ex. record index = [(p_0, o_0), (p_1, o_1), (p_2, o_2)]
         #       proj_col_idx = [0, 1, 1]
         #       --------------------------
@@ -180,7 +182,7 @@ class Bufferpool:
 
         :param rid: Base record RID
         """
-        self._overwrite_val(rid, MetaCol.INDIR, DEAD_RECORD_RID)
+        self._overwrite_val(rid, MetaCol.INDIR, RID.get_dead_record())
 
     # Helpers ------------------------
 
@@ -190,11 +192,8 @@ class Bufferpool:
 
         If full, allocates a new page and writes there.
         """
-        try:
-            # O(1) and reasonably fast
-            page: Page = next(reversed(self.pages[col]))
-        except StopIteration:
-            page = None
+        # O(1) and efficient
+        page: Page = next(reversed(self.pages[col].values()), None)
 
         if page is None or not page.has_capacity():
             # Create new page and update buffer pool
@@ -232,21 +231,20 @@ class Bufferpool:
     def _read_meta(self, record_indices, metacol):
         return self._read_val(metacol, record_indices[metacol])
 
-    def _get_base_indices(self, rid):
+    def _get_base_indices(self, rid: RID):
         return self.table.buffer.page_dir[rid]
 
     def _get_versioned_indices(self, record_indices, rel_version):
         """
         Given base record indices, gets record indices for a given relative
-        version. Will always go to most recent tail record (version 0) at
-        least.
+        version. Will always go to most recent tail record (version 0) at least.
         """
         self._validate_cumulative_update()
 
         # Will do it at least once since version 0 is newest tail record
         while rel_version <= 0:
             # Get previous tail record (or base record). base.indir == base.rid!
-            rid = self._read_meta(record_indices, MetaCol.INDIR)
+            rid = RID(self._read_meta(record_indices, MetaCol.INDIR))
 
             record_indices = self.table.buffer.page_dir[rid]
 
@@ -255,11 +253,15 @@ class Bufferpool:
         return record_indices
 
     def _validate_not_deleted(self, rid, record_indices):
-        if self._read_meta(record_indices, MetaCol.INDIR).tombstone:
+        if RID(self._read_meta(record_indices, MetaCol.INDIR)).tombstone:
             raise KeyError(f"Record {rid} was deleted")
-        
+
     @staticmethod
     def _validate_cumulative_update():
         if not config.CUMULATIVE_UPDATE:
             raise NotImplementedError(
                 "Noncumulative update not finished, set config.CUMULATIVE_UPDATE to True")
+
+    @staticmethod
+    def _get_timestamp():
+        return int(time.time() * 1000)  # millisecond

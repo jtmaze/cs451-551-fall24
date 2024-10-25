@@ -8,25 +8,34 @@ Indices are usually B-Trees, but other data structures can be used as well.
 """
 #from data_structures.btree import BTree
 
+from lstore.storage.rid import RID
+
 class DictIndex:
     def __init__(self):
         self.data = dict()
 
-    def get(val) -> RID:
-        return self.data[val]
+    def get(self, val) -> list[RID]:
+        output = self.data.get(val, None)
 
-    def get_range():
+        if output is None:
+            return []
+        
+        return [output]
+
+    def get_range(self):
         raise NotImplementedError()
 
-    def insert(val, rid):
+    def insert(self, val, rid):
         self.data[val] = rid
 
-    def delete(val):
+    def delete(self, val):
         del self.data[val]
 
 class Index:
 
-    def __init__(self, key, num_columns):
+    def __init__(self, table, key, num_columns):
+        self.table = table
+
         # One index for each table. All our empty initially.
         self.indices = [None for _ in range(num_columns)]
 
@@ -42,7 +51,7 @@ class Index:
             return []
 
         # If an index exists, use it to look up the RIDs
-        return self.indices[column].get(value, [])
+        return self.indices[column].get(value)
 
     def locate_range(self, begin, end, column):
         """
@@ -54,7 +63,7 @@ class Index:
         # Collect all RIDs for values within the specified range
         result = []
         for value in range(begin, end + 1):  # Assuming integer range for simplicity
-            result.extend(self.indices[column].get(value, []))
+            result.extend(self.indices[column].get(value))
         return result
 
     def create_index(self, column_number):
@@ -80,7 +89,7 @@ class Index:
 
     # Helper ---------------------
 
-    def _populate_index(col_number):
+    def _populate_index(self, col_number):
         """Goes through already data in column and populates index."""
         pass
         # Assuming that the table is accessible through a reference (e.g., self.table)

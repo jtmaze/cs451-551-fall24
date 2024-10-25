@@ -3,6 +3,8 @@ from typing import Literal
 from lstore.table import Table, Record
 from lstore.index import Index
 
+from lstore import config
+
 
 class Query:
     """
@@ -32,7 +34,8 @@ class Query:
             rid = rid_list[0]
             self.table.delete(rid)
             return True
-        except Exception:
+        except Exception as e:
+            print(f"{type(e)}: e")
             return False
 
     def insert(self, *columns) -> bool:
@@ -43,9 +46,10 @@ class Query:
         """
         try:
             # Insert the record into the table
-            error_code = self.table.insert(columns)
-            return error_code == 0  # 0 means no error, success
-        except Exception:
+            self.table.insert(columns)
+            return True
+        except Exception as e:
+            self._print_error(e)
             return False
 
     def select(
@@ -75,7 +79,8 @@ class Query:
                 return False
             
             return records
-        except Exception:
+        except Exception as e:
+            self._print_error(e)
             return False
 
     def select_version(self, search_key, search_key_index, projected_columns_index, relative_version):
@@ -102,7 +107,8 @@ class Query:
                 return False
             
             return records
-        except Exception:
+        except Exception as e:
+            self._print_error(e)
             return False
 
     def update(self, primary_key, *columns) -> bool:
@@ -120,7 +126,8 @@ class Query:
             rid = rid_list[0]
             self.table.update(rid, columns)
             return True
-        except Exception:
+        except Exception as e:
+            self._print_error(e)
             return False
 
     def sum(self, start_range, end_range, aggregate_column_index):
@@ -142,7 +149,8 @@ class Query:
                 else:
                     return False  # No records found in the range
             return total_sum
-        except Exception:
+        except Exception as e:
+            self._print_error(e)
             return False
 
     def sum_version(self, start_range, end_range, aggregate_column_index, relative_version):
@@ -174,3 +182,10 @@ class Query:
             u = self.update(key, *updated_columns)
             return u
         return False
+    
+    # Helpers -------------------------
+
+    @staticmethod
+    def _print_error(err):
+        if config.PRINT_ERRORS:
+            print(f"{type(err)}: {err}")

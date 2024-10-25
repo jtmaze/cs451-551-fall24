@@ -4,7 +4,7 @@ from lstore.table import Table
 class Database():
 
     def __init__(self):
-        self.tables = []
+        self.tables = dict()
         pass
 
     # Not required for milestone1
