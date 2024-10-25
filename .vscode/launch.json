@@ -15,13 +15,22 @@
             ]
         },
         {
-            "name": "exam_tester_1",
+            "name": "m1_tester",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/m1_tester.py",
+            "console": "integratedTerminal",
+            "args": [
+            ]
+        },
+        {
+            "name": "exam_tester_m1",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/exam_tester_m1.py",
             "console": "integratedTerminal",
             "args": [
-                //">", "tester_output/m1_tester_output.txt"
+                //">", "tester_output/exam_tester_m1.txt"
             ]
         },
     ]

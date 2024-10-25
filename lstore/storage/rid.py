@@ -45,7 +45,7 @@ class RID:
 
         # Shift and combine fields into integer
         rid_int = 0
-        for i, field in enumerate(tombstone, ts):
+        for i, field in enumerate((tombstone, ts)):
             rid_int |= (field << _RID_SHIFTS[i])
 
         # Create object and return
@@ -59,8 +59,8 @@ class RID:
     def timestamp(self):
         return (self.rid & _FIELD_MASKS[1]) >> _RID_SHIFTS[1]
     
-    def to_bytes(self):
-        return self.rid.to_bytes()
+    def to_bytes(self, length=8, byteorder="big"):
+        return self.rid.to_bytes(length, byteorder)
     
     def __hash__(self) -> int:
         return hash(self.rid)

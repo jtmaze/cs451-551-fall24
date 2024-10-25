@@ -61,12 +61,13 @@ class Bufferpool:
         record_indices[MetaCol.INDIR] = self._write_val(MetaCol.INDIR, rid)
         record_indices[MetaCol.RID] = self._write_val(MetaCol.RID, rid)
         record_indices[MetaCol.TIME] = self._write_val(
-            MetaCol.TIME, time.now())
+            MetaCol.TIME, rid.timestamp)
         record_indices[MetaCol.SCHEMA] = self._write_val(MetaCol.SCHEMA, 0)
 
         # Write data, saving record indices per remaining columns
         for i in range(MetaCol.COL_COUNT, self.total_columns):
-            record_indices[i] = self._write_val(i, columns[i])
+            record_indices[i] = self._write_val(
+                i, columns[i - MetaCol.COL_COUNT])
 
         # Return indices to be stored as values in page directory
         return record_indices
@@ -85,7 +86,7 @@ class Bufferpool:
         :param columns: New data values. Vals are none if no update for that col
         """
         self._validate_cumulative_update()
-    
+
         base_indices = self._get_base_indices(rid)
 
         self._validate_not_deleted(rid, base_indices)
@@ -103,7 +104,8 @@ class Bufferpool:
         # RID & Timestamp -------------
 
         tail_indices[MetaCol.RID] = self._write_val(MetaCol.RID, tail_rid)
-        tail_indices[MetaCol.TIME] = self._write_val(MetaCol.TIME, time.now())
+        tail_indices[MetaCol.TIME] = self._write_val(
+            MetaCol.TIME, tail_rid.timestamp)
 
         # Schema encoding & data ------
 
@@ -252,9 +254,9 @@ class Bufferpool:
         return record_indices
 
     def _validate_not_deleted(self, rid, record_indices):
-        if self._read_meta(record_indices, MetaCol.INDIR).tombstone:
+        if RID(self._read_meta(record_indices, MetaCol.INDIR)).tombstone:
             raise KeyError(f"Record {rid} was deleted")
-        
+
     @staticmethod
     def _validate_cumulative_update():
         if not config.CUMULATIVE_UPDATE:
