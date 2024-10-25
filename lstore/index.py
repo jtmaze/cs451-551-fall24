@@ -8,25 +8,29 @@ Indices are usually B-Trees, but other data structures can be used as well.
 """
 #from data_structures.btree import BTree
 
+from lstore.storage.rid import RID
+
 class DictIndex:
     def __init__(self):
         self.data = dict()
 
-    def get(val) -> RID:
+    def get(self, val) -> RID:
         return self.data[val]
 
-    def get_range():
+    def get_range(self):
         raise NotImplementedError()
 
-    def insert(val, rid):
+    def insert(self, val, rid):
         self.data[val] = rid
 
-    def delete(val):
+    def delete(self, val):
         del self.data[val]
 
 class Index:
 
-    def __init__(self, key, num_columns):
+    def __init__(self, table, key, num_columns):
+        self.table = table
+
         # One index for each table. All our empty initially.
         self.indices = [None for _ in range(num_columns)]
 
@@ -80,7 +84,7 @@ class Index:
 
     # Helper ---------------------
 
-    def _populate_index(col_number):
+    def _populate_index(self, col_number):
         """Goes through already data in column and populates index."""
         pass
         # Assuming that the table is accessible through a reference (e.g., self.table)

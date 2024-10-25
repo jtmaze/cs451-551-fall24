@@ -7,3 +7,6 @@ class MetaCol(Enum):
     SCHEMA = 3     # Bits representing cols, 1s where updated
 
     COL_COUNT = 4  # Number of metadata columns
+
+    def __add__(self, other):
+        return self.value + other
