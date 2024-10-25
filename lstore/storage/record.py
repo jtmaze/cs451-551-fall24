@@ -12,3 +12,6 @@ class Record:
         self.columns = columns
 
         self.rid = rid
+
+    def __repr__(self) -> str:
+        return str(self.columns)

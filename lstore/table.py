@@ -64,7 +64,7 @@ class Table:
         search_key: int,
         search_key_idx: int,
         proj_col_idx: list[Literal[0, 1]],
-        rel_version: int = 0
+        rel_version: int = 0  # Default to newest tail (lastest version)
     ) -> list[Record]:
         """
         Select records based on the primary key. Use the index for fast lookup.
@@ -72,7 +72,7 @@ class Table:
         :param search_key: Value to search on in index column
         :param search_key_idx: Index of column to search
         :param proj_col_idx: Data column indices that will be returned
-        :param rel_version: Relative record version. 0 is base, -<n> are tails
+        :param rel_version: Relative record version. 0 is latest, -<n> are prev
 
         :return: A list of Records for each projected column
         """
