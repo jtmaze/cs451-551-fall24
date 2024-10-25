@@ -46,6 +46,7 @@ class Query:
             self.table.insert(columns)
             return True
         except Exception as e:
+            print(e)
             return False
 
     def select(

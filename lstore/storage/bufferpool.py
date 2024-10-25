@@ -192,8 +192,8 @@ class Bufferpool:
 
         If full, allocates a new page and writes there.
         """
-        # O(1) and reasonably fast
-        page: Page = next(reversed(self.pages[col]), None)
+        # O(1) and efficient
+        page: Page = next(reversed(self.pages[col].values()), None)
 
         if page is None or not page.has_capacity():
             # Create new page and update buffer pool
