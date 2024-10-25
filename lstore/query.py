@@ -43,9 +43,9 @@ class Query:
         """
         try:
             # Insert the record into the table
-            error_code = self.table.insert(columns)
-            return error_code == 0  # 0 means no error, success
-        except Exception:
+            self.table.insert(columns)
+            return True
+        except Exception as e:
             return False
 
     def select(

@@ -17,7 +17,7 @@ from typing import Literal
 from lstore.storage.bufferpool import Bufferpool
 from lstore.storage.record_index import RecordIndex
 from lstore.storage.disk import Disk
-from lstore.storage.rid import RID, rid_generator
+from lstore.storage.rid import RID
 
 from lstore.storage.record import Record
 
@@ -31,8 +31,6 @@ class Buffer:
 
     def __init__(self, table) -> None:
         self.table = table
-
-        self._rid_gen = rid_generator()
 
         # In memory -------------------
 
@@ -49,7 +47,7 @@ class Buffer:
     def insert_record(self, columns: tuple[int]) -> RID:
         """
         """
-        rid: RID = next(self._rid_gen)
+        rid: RID = RID.from_params(tombstone=0)
 
         # Write and insert record indices per each column into page dir
         self.page_dir[rid] = self.bufferpool.write(rid, columns)
@@ -63,7 +61,7 @@ class Buffer:
         :param rid: Base RID
         :param columns: New data values
         """
-        tail_rid: RID = next(self._rid_gen)
+        tail_rid: RID = RID.from_params(tombstone=0)
 
         # Update
         self.page_dir[tail_rid] = self.bufferpool.update(

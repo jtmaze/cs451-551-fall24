@@ -38,11 +38,11 @@ class Table:
     def __merge(self):
         print("merge is happening")
 
-    def insert(self, columns: tuple[int]) -> int:
+    def insert(self, columns: tuple[int]):
         """
         Inserts a new record with the given data in columns.
 
-        Returns an error code if things went wrong.
+        Raises an exception if something went wrong.
 
         :param columns: New data values
         """
@@ -50,9 +50,8 @@ class Table:
             # Insert a record, buffer will return its new RID
             rid = self.buffer.insert_record(columns)
         except Exception as e:
-            # This catch-all error should be last
-            print(f"Error inserting record '{self.key}'")
-            return 1
+            print(f"Error inserting record '{columns}'")
+            raise # Re-raise exception error
 
         # Update primary key's index
         self.index.insert_val(self.key, columns[self.key], rid)
@@ -60,7 +59,6 @@ class Table:
         # TODO: Update other indices
         pass
 
-        return 0
 
     def select(
         self,

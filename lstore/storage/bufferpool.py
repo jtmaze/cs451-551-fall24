@@ -13,7 +13,7 @@ from collections import OrderedDict
 
 from lstore.storage.record import Record
 from lstore.storage.meta_col import MetaCol
-from lstore.storage.rid import RID, DEAD_RECORD_RID
+from lstore.storage.rid import RID
 from lstore.storage.record_index import RecordIndex
 
 from lstore import config
@@ -180,7 +180,7 @@ class Bufferpool:
 
         :param rid: Base record RID
         """
-        self._overwrite_val(rid, MetaCol.INDIR, DEAD_RECORD_RID)
+        self._overwrite_val(rid, MetaCol.INDIR, RID.get_dead_record())
 
     # Helpers ------------------------
 
@@ -190,11 +190,8 @@ class Bufferpool:
 
         If full, allocates a new page and writes there.
         """
-        try:
-            # O(1) and reasonably fast
-            page: Page = next(reversed(self.pages[col]))
-        except StopIteration:
-            page = None
+        # O(1) and reasonably fast
+        page: Page = next(reversed(self.pages[col]), None)
 
         if page is None or not page.has_capacity():
             # Create new page and update buffer pool
