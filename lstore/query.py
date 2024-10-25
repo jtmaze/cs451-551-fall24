@@ -17,7 +17,6 @@ class Query:
     def __init__(self, table):
         self.table = table
 
-
     def delete(self, primary_key) -> bool:
         """
         # internal Method
@@ -67,21 +66,7 @@ class Query:
         # Returns False if record locked by TPL
         # Assume that select will never be called on a key that doesn't exist
         """
-        try:
-            # Get projected list of records
-            records = self.table.select(
-                search_key,
-                search_key_index,
-                projected_columns_index,
-            )
-
-            if not records:
-                return False
-            
-            return records
-        except Exception as e:
-            self._print_error(e)
-            return False
+        return self._select_core(search_key, search_key_index, projected_columns_index)
 
     def select_version(self, search_key, search_key_index, projected_columns_index, relative_version):
         """
@@ -94,22 +79,7 @@ class Query:
         # Returns False if record locked by TPL
         # Assume that select will never be called on a key that doesn't exist
         """
-        try:
-            # Get projected list of records
-            records = self.table.select(
-                search_key,
-                search_key_index,
-                projected_columns_index,
-                relative_version,
-            )
-
-            if not records:
-                return False
-            
-            return records
-        except Exception as e:
-            self._print_error(e)
-            return False
+        return self._select_core(search_key, search_key_index, projected_columns_index, relative_version)
 
     def update(self, primary_key, *columns) -> bool:
         """
@@ -139,19 +109,7 @@ class Query:
         # Returns the summation of the given range upon success
         # Returns False if no record exists in the given range
         """
-        try:
-            total_sum = 0
-            for key in range(start_range, end_range + 1):
-                records = self.select(key, self.table.key, [1] * self.table.num_columns)
-                if records:
-                    for record in records:
-                        total_sum += record.columns[aggregate_column_index]
-                else:
-                    return False  # No records found in the range
-            return total_sum
-        except Exception as e:
-            self._print_error(e)
-            return False
+        return self._sum_core(start_range, end_range, aggregate_column_index)
 
     def sum_version(self, start_range, end_range, aggregate_column_index, relative_version):
         """
@@ -163,8 +121,7 @@ class Query:
         # Returns the summation of the given range upon success
         # Returns False if no record exists in the given range
         """
-        # TODO: Implement version control for historical record versions
-        return False
+        return self._sum_core(start_range, end_range, aggregate_column_index, relative_version)
 
     def increment(self, key, column):
         """
@@ -182,8 +139,46 @@ class Query:
             u = self.update(key, *updated_columns)
             return u
         return False
-    
+
     # Helpers -------------------------
+
+    def _select_core(self, search_key, search_key_index, projected_columns_index, relative_version=0):
+        """
+        Core select functionality for use by select and select_version.
+        """
+        try:
+            # Get projected list of records
+            records = self.table.select(
+                search_key,
+                search_key_index,
+                projected_columns_index,
+                relative_version,
+            )
+
+            if not records:
+                return False
+
+            return records
+        except Exception as e:
+            self._print_error(e)
+            return False
+
+    def _sum_core(self, start_range, end_range, aggregate_column_index, relative_version=0):
+        """
+        Core summation functionality for use by sum and sum_version.
+        """
+        try:
+            total_sum = 0
+            for key in range(start_range, end_range + 1):
+                records = self.select_version(
+                    key, self.table.key, [1] * self.table.num_columns, relative_version)
+                if records:
+                    for record in records:
+                        total_sum += record.columns[aggregate_column_index]
+            return total_sum
+        except Exception as e:
+            self._print_error(e)
+            return False
 
     @staticmethod
     def _print_error(err):

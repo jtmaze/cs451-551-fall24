@@ -76,7 +76,7 @@ class Buffer:
         """
         :param rid: RID of base record to retrieve
         :param proj_col_idx: List of 0s or 1s indicating which columns to return
-        :param rel_version: Relative version to return. 0 is base, -<n> are tails
+        :param rel_version: Relative version to return. 0 is latest, -<n> are prev
 
         :return: Populated Record with data, or None if unsuccessful
         """

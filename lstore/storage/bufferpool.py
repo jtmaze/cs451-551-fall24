@@ -146,7 +146,7 @@ class Bufferpool:
 
         :param rid: Base record RID
         :param proj_col_idx: List of 0s or 1s indicating which columns to return
-        :param rel_version: Relative version to return. 0 is newest, -<n> are tails
+        :param rel_version: Relative version to return. 0 is latest, -<n> are prev
 
         :return: Record with retrieved data in record.columns and base rid
         """

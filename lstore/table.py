@@ -72,7 +72,7 @@ class Table:
         :param search_key: Value to search on in index column
         :param search_key_idx: Index of column to search
         :param proj_col_idx: Data column indices that will be returned
-        :param rel_version: Relative record version. 0 is base, -<n> are tails
+        :param rel_version: Relative record version. 0 is latest, -<n> are prev
 
         :return: A list of Records for each projected column
         """
