@@ -10,6 +10,7 @@ from typing import Literal
 import uuid
 
 _RID_BITS = (
+    1,   # is_base
     1,   # tombstone
     64,  # UUID
 )
@@ -35,17 +36,18 @@ class RID:
         self._rid = rid_int
 
     @classmethod
-    def from_params(cls, tombstone: Literal[0, 1]):
+    def from_params(cls, is_base: Literal[0, 1], tombstone: Literal[0, 1]):
         """
         Constructor with parameters. ex rid = RID.from_params(...)
         """
         # Ensure correct amount of bits
-        tombstone &= _RID_MASKS[0]
-        id = uuid.uuid4().int & _RID_MASKS[1]
+        is_base &= _RID_MASKS[0]
+        tombstone &= _RID_MASKS[1]
+        id = uuid.uuid4().int & _RID_MASKS[2]
 
         # Shift and combine fields into integer
         rid_int = 0
-        for i, field in enumerate((tombstone, id)):
+        for i, field in enumerate((is_base, tombstone, id)):
             rid_int |= (field << _RID_SHIFTS[i])
 
         # Create object and return
@@ -54,14 +56,18 @@ class RID:
     @property
     def rid(self):
         return self._rid
+    
+    @property
+    def is_base(self):
+        return (self.rid & _FIELD_MASKS[0]) >> _RID_SHIFTS[0]
 
     @property
     def tombstone(self):
-        return (self.rid & _FIELD_MASKS[0]) >> _RID_SHIFTS[0]
+        return (self.rid & _FIELD_MASKS[1]) >> _RID_SHIFTS[1]
     
     @property
     def uid(self):
-        return (self.rid & _FIELD_MASKS[1]) >> _RID_SHIFTS[1]
+        return (self.rid & _FIELD_MASKS[2]) >> _RID_SHIFTS[2]
     
     def to_bytes(self, length=8, byteorder="big"):
         return self.rid.to_bytes(length, byteorder)

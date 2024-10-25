@@ -64,7 +64,7 @@ class Table:
         search_key: int,
         search_key_idx: int,
         proj_col_idx: list[Literal[0, 1]],
-        rel_version: int = 0
+        rel_version: int = 0  # Default to newest tail (lastest version)
     ) -> list[Record]:
         """
         Select records based on the primary key. Use the index for fast lookup.

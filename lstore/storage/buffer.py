@@ -47,7 +47,7 @@ class Buffer:
     def insert_record(self, columns: tuple[int]) -> RID:
         """
         """
-        rid: RID = RID.from_params(tombstone=0)
+        rid: RID = RID.from_params(is_base=1, tombstone=0)
 
         # Write and insert record indices per each column into page dir
         self.page_dir[rid] = self.bufferpool.write(rid, columns)
@@ -61,7 +61,7 @@ class Buffer:
         :param rid: Base RID
         :param columns: New data values
         """
-        tail_rid: RID = RID.from_params(tombstone=0)
+        tail_rid: RID = RID.from_params(is_base=0, tombstone=0)
 
         # Update
         self.page_dir[tail_rid] = self.bufferpool.update(
@@ -76,7 +76,7 @@ class Buffer:
         """
         :param rid: RID of base record to retrieve
         :param proj_col_idx: List of 0s or 1s indicating which columns to return
-        :param rel_version: Relative version to return. 0 is newest, -<n> is old
+        :param rel_version: Relative version to return. 0 is base, -<n> are tails
 
         :return: Populated Record with data, or None if unsuccessful
         """
