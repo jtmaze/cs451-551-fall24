@@ -51,14 +51,13 @@ class Table:
             rid = self.buffer.insert_record(columns)
         except Exception as e:
             print(f"Error inserting record '{columns}'")
-            raise # Re-raise exception error
+            raise  # Re-raise exception error
 
         # Update primary key's index
         self.index.insert_val(self.key, columns[self.key], rid)
 
         # TODO: Update other indices
         pass
-
 
     def select(
         self,
@@ -73,23 +72,23 @@ class Table:
         :param search_key: Value to search on in index column
         :param search_key_idx: Index of column to search
         :param proj_col_idx: Data column indices that will be returned
-        :param rel_version: Relative record version. 0 is newest, -<n> is older
+        :param rel_version: Relative record version. 0 is base, -<n> are tails
 
         :return: A list of Records for each projected column
         """
         # Get rid (point query) or rids (range query) via index
         rid_list = self.index.locate(search_key_idx, search_key)
 
-        result = []
+        records = []
         for rid in rid_list:
             try:
-                result.append(
+                records.append(
                     self.buffer.get_record(rid, proj_col_idx, rel_version)
                 )
             except Exception as e:
                 print(f"Failed to find rid={rid}")
 
-        return result
+        return records
 
     def update(self, rid: RID, columns: tuple[int]):
         """

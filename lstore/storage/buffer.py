@@ -81,7 +81,7 @@ class Buffer:
         :return: Populated Record with data, or None if unsuccessful
         """
         return self.bufferpool.read(rid, proj_col_idx, rel_version)
-    
+
     def delete_record(self, rid: RID):
         """
         Marks record as deleted by setting base record's indirection to special

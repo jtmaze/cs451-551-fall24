@@ -41,5 +41,5 @@ if "%Test%"=="1" (
     exit /b 1
 )
 
-echo Test completed successfully.
+echo Test completed and output written.
 exit /b 0

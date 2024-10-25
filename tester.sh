@@ -34,4 +34,4 @@ case "$Test" in
     ;;
 esac
 
-echo "Test completed successfully."
+echo "Test completed and output written."

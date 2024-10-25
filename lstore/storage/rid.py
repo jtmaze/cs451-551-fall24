@@ -60,7 +60,7 @@ class RID:
         return (self.rid & _FIELD_MASKS[0]) >> _RID_SHIFTS[0]
     
     @property
-    def timestamp(self):
+    def uid(self):
         return (self.rid & _FIELD_MASKS[1]) >> _RID_SHIFTS[1]
     
     def to_bytes(self, length=8, byteorder="big"):

@@ -61,7 +61,7 @@ class Bufferpool:
         record_indices[MetaCol.INDIR] = self._write_val(MetaCol.INDIR, rid)
         record_indices[MetaCol.RID] = self._write_val(MetaCol.RID, rid)
         record_indices[MetaCol.TIME] = self._write_val(
-            MetaCol.TIME, rid.timestamp)
+            MetaCol.TIME, self._get_timestamp())
         record_indices[MetaCol.SCHEMA] = self._write_val(MetaCol.SCHEMA, 0)
 
         # Write data, saving record indices per remaining columns
@@ -97,14 +97,15 @@ class Bufferpool:
 
         # Set new tail indir to prev tail rid and base indir to new rid
         prev_rid = RID(self._read_meta(base_indices, MetaCol.INDIR))
-        tail_indices[MetaCol.INDIR] = self._write_val(MetaCol.INDIR, prev_rid)
+        tail_indices[MetaCol.INDIR] = self._write_val(
+            MetaCol.INDIR, prev_rid)
         self._overwrite_val(rid, MetaCol.INDIR, tail_rid)
 
         # RID & Timestamp -------------
 
         tail_indices[MetaCol.RID] = self._write_val(MetaCol.RID, tail_rid)
         tail_indices[MetaCol.TIME] = self._write_val(
-            MetaCol.TIME, tail_rid.timestamp)
+            MetaCol.TIME, self._get_timestamp())
 
         # Schema encoding & data ------
 
@@ -236,8 +237,7 @@ class Bufferpool:
     def _get_versioned_indices(self, record_indices, rel_version):
         """
         Given base record indices, gets record indices for a given relative
-        version. Will always go to most recent tail record (version 0) at
-        least.
+        version. Will always go to most recent tail record (version 0) at least.
         """
         self._validate_cumulative_update()
 
@@ -261,3 +261,7 @@ class Bufferpool:
         if not config.CUMULATIVE_UPDATE:
             raise NotImplementedError(
                 "Noncumulative update not finished, set config.CUMULATIVE_UPDATE to True")
+
+    @staticmethod
+    def _get_timestamp():
+        return int(time.time() * 1000)  # millisecond
