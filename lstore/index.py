@@ -14,8 +14,13 @@ class DictIndex:
     def __init__(self):
         self.data = dict()
 
-    def get(self, val) -> RID:
-        return self.data[val]
+    def get(self, val) -> list[RID]:
+        output = self.data.get(val, None)
+
+        if output is None:
+            return []
+        
+        return [output]
 
     def get_range(self):
         raise NotImplementedError()
@@ -46,7 +51,7 @@ class Index:
             return []
 
         # If an index exists, use it to look up the RIDs
-        return self.indices[column].get(value, [])
+        return self.indices[column].get(value)
 
     def locate_range(self, begin, end, column):
         """
@@ -58,7 +63,7 @@ class Index:
         # Collect all RIDs for values within the specified range
         result = []
         for value in range(begin, end + 1):  # Assuming integer range for simplicity
-            result.extend(self.indices[column].get(value, []))
+            result.extend(self.indices[column].get(value))
         return result
 
     def create_index(self, column_number):

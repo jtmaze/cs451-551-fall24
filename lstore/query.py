@@ -76,7 +76,8 @@ class Query:
                 return False
             
             return records
-        except Exception:
+        except Exception as e:
+            print(e)
             return False
 
     def select_version(self, search_key, search_key_index, projected_columns_index, relative_version):
