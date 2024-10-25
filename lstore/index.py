@@ -6,6 +6,7 @@ this object.
 
 Indices are usually B-Trees, but other data structures can be used as well.
 """
+#from data_structures.btree import BTree
 
 class DictIndex:
     def __init__(self):

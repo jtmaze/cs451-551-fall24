@@ -84,4 +84,35 @@ class BPTreeNode:
                     return current_vals[i]
             print(f'Key:{search_key} not found in leaf node')
             return None
+        
+
+    def range_query_leaf(self, key_low, key_high):
+        """
+        Inputs: the low and high key for a range query on a leaf 
+        
+        Returns:
+        - A list of values within the keys range.
+        - A next pointer IF needed 
+        """
+        current_keys = self.keys
+        current_vals = self.values
+        results = []
+        next_pointer = None
+
+        leaf_max_key = current_keys[-1]
+        # 1) Easy case, entire range query on leaf node
+        if key_high <= leaf_max_key:
+            next_pointer = None
+        # 2) Harder case follow pointer right to higher node    
+        else:
+            next_pointer = self.forward_key
+
+        for i in range(len(current_keys)):
+            if current_keys[i] > key_high:
+                break # More efficient to end loop when done
+            if key_low <= current_keys[i]:
+                results.append(current_vals[i])
+
+        return(results, next_pointer)
+
 # %%

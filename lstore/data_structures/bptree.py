@@ -2,7 +2,7 @@
 import math
 import pprint as pp # For debugging, !!! remove later
 
-from bptree_node import BPTreeNode
+from data_structures.bptree_node import BPTreeNode
 
 class BPTree:
     def __init__(self, n):
@@ -32,7 +32,7 @@ class BPTree:
         leaf_node.leaf_delete(leaf_node, key_delete)
         
         if len(leaf_node.keys) < math.ceil(self.n / 2):
-            print('UGHHH doing rebalancing shit later')
+            print('UGHHH doing rebalancing later')
 
 
 
@@ -145,7 +145,28 @@ class BPTree:
                 return True
         print(f'Key:{key_search} not found in leaf node')
         return False # If the key/value pair is not found
+    
+    def range_query_tree(self, key_low, key_high):
+        """
+        Performs range query on tree returns list of values
+        """
+        results = []
+        # Find the leaf node with key_low
+        low_leaf = self.search_node(key_low)
 
+        while low_leaf:
+            leaf_key_max = low_leaf.keys[-1]
+            # Range query on a leaf
+            leaf_results, next_leaf_pointer = low_leaf.range_query_leaf(key_low, key_high)
+            results.extend(leaf_results)
+
+            if leaf_key_max >= key_high:
+                break
+        
+            # Otherwise, move to the next leaf node
+            low_leaf = next_leaf_pointer
+
+        return results
 
 
 # %% Testing down here because I'm a noob
@@ -183,6 +204,7 @@ print(r)
 
 # r = test_leaf.point_query_node(search_key)
 # print(r)
+test_range = bptree.range_query_tree(7, 12)
 
 del bptree
 
