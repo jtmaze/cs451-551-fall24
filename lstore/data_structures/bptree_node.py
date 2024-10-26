@@ -41,7 +41,7 @@ class BPTreeNode:
                     inserted = True
                     break
                 
-                elif key_insert == current_keys[i]: # Not sure if I shold also check current keys??
+                elif key_insert == current_keys[i]: 
                     self.values[i].append(value_insert)
                     #print(f'Appening a new value {value_insert} to existing key {key_insert}')
                     inserted = True
@@ -72,8 +72,8 @@ class BPTreeNode:
         
 
     def point_query_node(self, search_key):
-
-        """searches """
+        """searches a leaf node for a single key's values"""
+        
         current_vals = self.values
         current_keys = self.keys
 

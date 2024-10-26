@@ -1,8 +1,7 @@
 # %%
 import math
-import pprint as pp # For debugging, !!! remove later
 
-from data_structures.bptree_node import BPTreeNode
+from lstore.data_structures.bptree_node import BPTreeNode
 
 class BPTree:
     def __init__(self, n):
@@ -171,80 +170,80 @@ class BPTree:
 
 # %% Testing down here because I'm a noob
 # Function to print the tree structure
-def print_tree(node, level=0):
-    indent = '   ' * level
-    if node.is_leaf:
-        print(f"{indent}Leaf Node: Keys={node.keys} and Leaf Values={node.values}")
-    else:
-        print(f"{indent}Internal Node: Keys={node.keys}")
-        for child in node.values:
-            print_tree(child, level + 1)
+# def print_tree(node, level=0):
+#     indent = '   ' * level
+#     if node.is_leaf:
+#         print(f"{indent}Leaf Node: Keys={node.keys} and Leaf Values={node.values}")
+#     else:
+#         print(f"{indent}Internal Node: Keys={node.keys}")
+#         for child in node.values:
+#             print_tree(child, level + 1)
 
 
-order = 4  
-bptree = BPTree(order)
+# order = 4  
+# bptree = BPTree(order)
 
-# Insert key/value pairs
-keys_to_insert = [10, 20, 5, 6, 12, 30, 7, 17, 50, 53, 8, 8]
-values_to_insert = [100, 200, 50, 60, 120, 300, 70, 170, 500, 520, 1776, 720]
+# # Insert key/value pairs
+# keys_to_insert = [10, 20, 5, 6, 12, 30, 7, 17, 50, 53, 8, 8]
+# values_to_insert = [100, 200, 50, 60, 120, 300, 70, 170, 500, 520, 1776, 720]
 
-for key, value in zip(keys_to_insert, values_to_insert):
-    bptree.insert(key, value)
+# for key, value in zip(keys_to_insert, values_to_insert):
+#     bptree.insert(key, value)
 
-print_tree(bptree.root)
+# print_tree(bptree.root)
 
-bptree.delete(key_delete=5)
+# bptree.delete(key_delete=5)
 
-# %%
-search_key = 8
-test_leaf = bptree.search_node(search_key)
-print(test_leaf.values)
-r = test_leaf.point_query_node(search_key)
-print(r)
-
+# # %%
+# search_key = 8
+# test_leaf = bptree.search_node(search_key)
+# print(test_leaf.values)
 # r = test_leaf.point_query_node(search_key)
 # print(r)
-test_range = bptree.range_query_tree(7, 12)
 
-del bptree
+# # r = test_leaf.point_query_node(search_key)
+# # print(r)
+# test_range = bptree.range_query_tree(7, 12)
 
-# %%
-import random 
+# del bptree
 
-def make_unique_rando(lenght, min, max):
-    rando = []
-    while len(rando) < lenght:
-        n = random.randint(min, max)
-        if n not in rando:
-            rando.append(n)
-    return rando
+# # %%
+# import random 
 
-def make_nonunique_rando(lenght, min, max):
-    rando = []
-    while len(rando) < lenght:
-        n = random.randint(min, max)
-        rando.append(n)
-    return rando
+# def make_unique_rando(lenght, min, max):
+#     rando = []
+#     while len(rando) < lenght:
+#         n = random.randint(min, max)
+#         if n not in rando:
+#             rando.append(n)
+#     return rando
 
-order = 10
-bptree = BPTree(order)
-keys_to_insert = make_nonunique_rando(1000, 1, 20)
-values_to_insert = make_unique_rando(1000, 1000, 100000)
+# def make_nonunique_rando(lenght, min, max):
+#     rando = []
+#     while len(rando) < lenght:
+#         n = random.randint(min, max)
+#         rando.append(n)
+#     return rando
 
-for k, v in zip(keys_to_insert, values_to_insert):
-    bptree.insert(k, v)
+# order = 10
+# bptree = BPTree(order)
+# keys_to_insert = make_nonunique_rando(1000, 1, 20)
+# values_to_insert = make_unique_rando(1000, 1000, 100000)
 
-print_tree(bptree.root)
+# for k, v in zip(keys_to_insert, values_to_insert):
+#     bptree.insert(k, v)
 
-search_key = 8
-test_results = bptree.search_node(search_key).point_query_node(search_key)
-print(test_results)
+# print_tree(bptree.root)
 
-# %%
+# search_key = 8
+# test_results = bptree.search_node(search_key).point_query_node(search_key)
+# print(test_results)
 
-bptree.delete(key_delete=3)
-# %%
-search_key = 3
-test_results = bptree.search_node(search_key).point_query_node(search_key)
-print(test_results)
+# # %%
+
+# bptree.delete(key_delete=3)
+# # %%
+# search_key = 3
+# test_results = bptree.search_node(search_key).point_query_node(search_key)
+# print(test_results)
 # %%
