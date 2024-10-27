@@ -16,6 +16,7 @@ if (-not (Test-Path $OutputDir)) {
 
 # Run test based on given test name and save results
 switch ($Test) {
+    "main"      { py .\__main__.py > "$OutputDir/__main__.txt" }
     "1"      { py .\m1_tester.py > "$OutputDir/m1_tester.txt" }
     "2"      { py .\m2_tester.py > "$OutputDir/m2_tester.txt" }
     "3"      { py .\m3_tester.py > "$OutputDir/m3_tester.txt" }

@@ -182,7 +182,11 @@ class Bufferpool:
 
         :param rid: Base record RID
         """
-        self._overwrite_val(rid, MetaCol.INDIR, RID.get_dead_record())
+        # Create RID for deletion record
+        del_rid = RID.from_params(0, 1)
+
+        # Create tail record with tombstone set
+        self.update(rid, del_rid, tuple(None for _ in range(self.table.num_columns)))
 
     # Helpers ------------------------
 
