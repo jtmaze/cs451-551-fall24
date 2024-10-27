@@ -68,7 +68,7 @@ class Buffer:
         """
         tail_rid: RID = RID.from_params(is_base=0, tombstone=0)
 
-        # Update
+        # Update and save to page directory (for bufferpool to find)
         self.page_dir[tail_rid] = self.bufferpool.update(
             rid, tail_rid, columns)
 
@@ -94,4 +94,9 @@ class Buffer:
 
         :param rid: The RID of the record to delete
         """
-        self.bufferpool.delete(rid)
+        # Create RID for deletion record
+        dead_rid = RID.from_params(0, 1)
+
+        # Update and save to page directory (for bufferpool to find)
+        self.page_dir[dead_rid] = self.bufferpool.update(
+            rid, dead_rid, tuple(None for _ in range(self.table.num_columns)))

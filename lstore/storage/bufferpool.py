@@ -176,17 +176,6 @@ class Bufferpool:
 
         return Record(self.table.key, columns, rid)
 
-    def delete(self, rid: RID):
-        """
-        Delete by overwriting indirection with special RID w/ tombstone == True
-
-        :param rid: Base record RID
-        """
-        # Create RID for deletion record
-        del_rid = RID.from_params(0, 1)
-
-        # Create tail record with tombstone set
-        self.update(rid, del_rid, tuple(None for _ in range(self.table.num_columns)))
 
     # Helpers ------------------------
 
