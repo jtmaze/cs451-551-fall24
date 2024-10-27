@@ -9,7 +9,7 @@ from typing import Literal
 import time
 
 # TODO: For LRU page cache, but large memory footprint
-from collections import OrderedDict
+# from collections import OrderedDict
 
 from lstore.storage.record import Record
 from lstore.storage.meta_col import MetaCol
@@ -40,7 +40,7 @@ class Bufferpool:
 
         # Maps page id -> page for each column (including metadata)
         self.pages = [
-            OrderedDict() for _ in range(self.total_columns)
+            dict() for _ in range(self.total_columns)
         ]
 
     def write(self, rid: RID, columns: tuple[int]) -> list[RecordIndex]:
@@ -182,7 +182,11 @@ class Bufferpool:
 
         :param rid: Base record RID
         """
-        self._overwrite_val(rid, MetaCol.INDIR, RID.get_dead_record())
+        # Create RID for deletion record
+        del_rid = RID.from_params(0, 1)
+
+        # Create tail record with tombstone set
+        self.update(rid, del_rid, tuple(None for _ in range(self.table.num_columns)))
 
     # Helpers ------------------------
 

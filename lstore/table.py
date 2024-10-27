@@ -107,7 +107,7 @@ class Table:
 
         :param rid: RID of record to 'delete'
         """
-        self.buffer.delete(rid)
+        self.buffer.delete_record(rid)
 
     def __del__(self):
         """
