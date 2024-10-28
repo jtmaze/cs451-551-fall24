@@ -1,7 +1,10 @@
 # %%
 import math
 
-from lstore.data_structures.bptree_node import BPTreeNode
+from lstore.index_types.bptree_node import BPTreeNode
+from lstore.index_types.index_type import IndexType
+
+from lstore.storage.rid import RID
 
 class BPTree:
     def __init__(self, n):
@@ -166,3 +169,33 @@ class BPTree:
             low_leaf = next_leaf_pointer
 
         return results
+
+### B+ Tree Implementation
+class BPTreeIndex(IndexType):
+    def __init__(self, n=100):
+        self.tree = BPTree(n=n) # Adjust n as needed to test performance
+    
+    def get(self, val) -> list[RID]:
+        leaf = self.tree.search_node(val)
+        values = leaf.point_query_node(val)
+        if values is None:
+            return []
+        else:
+            # Maybe flatten?
+            return values
+        
+    def get_range(self, begin, end):
+        results = self.tree.range_query_tree(begin, end)
+        # Will need to flatten results, becuase could have buckets in BPTree
+        # i.e. multiple values per key
+        flattened_results = [val for sublist in results for val in sublist]
+        return flattened_results
+    
+    def insert(self, val, rid):
+        self.tree.insert(val, rid)
+
+    def delete(self, val):
+        """
+        !!! Values will be deleted from leafs, but tree won't rebalance yet.
+        """
+        self.tree.delete(val)

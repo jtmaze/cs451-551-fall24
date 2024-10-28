@@ -4,12 +4,15 @@ index of the primary key and number of data columns. Also manages in-memory
 buffer and indices for performant querying.
 """
 
-from typing import Literal
+from typing import Literal, Type
 
 from lstore.index import Index
 from lstore.storage.buffer import Buffer
 from lstore.storage.record import Record
 from lstore.storage.rid import RID
+
+from lstore.index_types.dict_index import DictIndex
+from lstore.index_types.bptree import BPTreeIndex
 
 
 class Table:
@@ -21,7 +24,11 @@ class Table:
     :param key:          # Index of table key in columns (ie primary key, ex 2 if 3rd col)
     """
 
-    def __init__(self, name: str, num_columns: int, key: int):
+    def __init__(self, 
+        name: str,
+        num_columns: int, 
+        key: int,
+    ):
         if key >= num_columns:
             raise IndexError("Key index is greater than the number of columns")
 
@@ -33,7 +40,7 @@ class Table:
         self.buffer = Buffer(self)
 
         # Index for faster querying on primary key and possibly other columns
-        self.index = Index(self, key, num_columns)
+        self.index = Index(self, key, num_columns, BPTreeIndex)
 
     def __merge(self):
         print("merge is happening")
