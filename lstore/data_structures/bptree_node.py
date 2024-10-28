@@ -41,7 +41,7 @@ class BPTreeNode:
                     inserted = True
                     break
                 
-                elif key_insert == current_keys[i]: # Not sure if I shold also check current keys??
+                elif key_insert == current_keys[i]: 
                     self.values[i].append(value_insert)
                     #print(f'Appening a new value {value_insert} to existing key {key_insert}')
                     inserted = True
@@ -65,22 +65,22 @@ class BPTreeNode:
                 if key_delete == current_keys[i]:
                     del current_keys[i]
                     del current_values[i]
-                    print(f'Key: {key_delete} deleted')
+                    #print(f'Key: {key_delete} deleted')
                     return
                 
             print(f'Key {key_delete} not found')
         
 
     def point_query_node(self, search_key):
-
-        """searches """
+        """searches a leaf node for a single key's values"""
+        
         current_vals = self.values
         current_keys = self.keys
 
         if self.is_leaf:
             for i in range(len(current_keys)):
                 if current_keys[i] == search_key:
-                    print(f'Key:{search_key} found in leaf node')
+                    #print(f'Key:{search_key} found in leaf node')
                     return current_vals[i]
             print(f'Key:{search_key} not found in leaf node')
             return None
@@ -115,4 +115,3 @@ class BPTreeNode:
 
         return(results, next_pointer)
 
-# %%

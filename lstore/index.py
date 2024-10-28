@@ -6,7 +6,8 @@ this object.
 
 Indices are usually B-Trees, but other data structures can be used as well.
 """
-#from data_structures.btree import BTree
+
+from lstore.data_structures.bptree import BPTree
 
 from lstore.storage.rid import RID
 
@@ -72,7 +73,7 @@ class Index:
         """
         if self.indices[column_number] is None:
             # Create a new dictionary to serve as the index for this column
-            self.indices[column_number] = DictIndex()
+            self.indices[column_number] = BPTreeIndex()
 
             self._populate_index(column_number)
 
@@ -99,3 +100,34 @@ class Index:
         #         self.indices[column_number][column_value].append(rid)
         #     else:
         #         self.indices[column_number][column_value] = [rid]
+
+### B+ Tree Implementation
+class BPTreeIndex:
+    def __init__(self):
+        self.tree = BPTree(n=5) # Adjust n as needed to test performance
+    
+    def get(self, val) -> list[RID]:
+        leaf = self.tree.search_node(val)
+        values = leaf.point_query_node(val)
+        if values is None:
+            return []
+        else:
+            # Maybe flatten?
+            return values
+        
+    def get_range(self, begin, end):
+        results = self.tree.range_query_tree(begin, end)
+        # Will need to flatten results, becuase could have buckets in BPTree
+        # i.e. multiple values per key
+        flattened_results = [val for sublist in results for val in sublist]
+        return flattened_results
+    
+    def insert(self, val, rid):
+        self.tree.insert(val, rid)
+
+    def delete(self, val):
+        """
+        !!! Values will be deleted from leafs, but tree won't rebalance yet.
+        """
+        self.tree.delete(val)
+
