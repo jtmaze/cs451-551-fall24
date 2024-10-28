@@ -20,6 +20,7 @@ echo "Test name: $Test"
 
 # Run the appropriate test based on the given argument
 case "$Test" in
+  "main") python3 ./__main__.py > "$OutputDir/__main__.txt" ;;
   "1") python3 ./m1_tester.py > "$OutputDir/m1_tester.txt" ;;
   "2") python3 ./m2_tester.py > "$OutputDir/m2_tester.txt" ;;
   "3") python3 ./m3_tester.py > "$OutputDir/m3_tester.txt" ;;

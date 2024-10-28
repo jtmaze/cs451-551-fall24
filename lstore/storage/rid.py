@@ -7,12 +7,24 @@ hashable for fast buffer access.
 
 from typing import Literal
 
+from enum import IntEnum
+
 import uuid
+
+
+# Setup -----------------------------------------
+
+class _RIDField(IntEnum):
+    """RID attribute index"""
+    IS_BASE = 0
+    TOMBSTONE = 1
+    UUID = 2
+
 
 _RID_BITS = (
     1,   # is_base
     1,   # tombstone
-    64,  # UUID
+    126, # UUID
 )
 
 # Bit shift needed to get to field (ie cumulative field offset)
@@ -30,6 +42,9 @@ _FIELD_MASKS = tuple(
     _RID_MASKS[i] << _RID_SHIFTS[i] for i in range(len(_RID_BITS))
 )
 
+
+# Class -----------------------------------------
+
 class RID:
 
     def __init__(self, rid_int: int):
@@ -41,9 +56,9 @@ class RID:
         Constructor with parameters. ex rid = RID.from_params(...)
         """
         # Ensure correct amount of bits
-        is_base &= _RID_MASKS[0]
-        tombstone &= _RID_MASKS[1]
-        id = uuid.uuid4().int & _RID_MASKS[2]
+        is_base &= _RID_MASKS[_RIDField.IS_BASE]
+        tombstone &= _RID_MASKS[_RIDField.TOMBSTONE]
+        id = uuid.uuid4().int & _RID_MASKS[_RIDField.UUID]
 
         # Shift and combine fields into integer
         rid_int = 0
@@ -52,34 +67,29 @@ class RID:
 
         # Create object and return
         return cls(rid_int)
-    
+
     @property
     def rid(self):
         return self._rid
-    
+
     @property
     def is_base(self):
-        return (self.rid & _FIELD_MASKS[0]) >> _RID_SHIFTS[0]
+        return (self.rid & _FIELD_MASKS[_RIDField.IS_BASE]) >> _RID_SHIFTS[_RIDField.IS_BASE]
 
     @property
     def tombstone(self):
-        return (self.rid & _FIELD_MASKS[1]) >> _RID_SHIFTS[1]
-    
+        return (self.rid & _FIELD_MASKS[_RIDField.TOMBSTONE]) >> _RID_SHIFTS[_RIDField.TOMBSTONE]
+
     @property
     def uid(self):
-        return (self.rid & _FIELD_MASKS[2]) >> _RID_SHIFTS[2]
-    
+        return (self.rid & _FIELD_MASKS[_RIDField.UUID]) >> _RID_SHIFTS[_RIDField.UUID]
+
     def to_bytes(self, length=8, byteorder="big"):
         return self.rid.to_bytes(length, byteorder)
-    
+
     def __hash__(self) -> int:
         return hash(self.rid)
-    
+
     def __eq__(self, rhs) -> bool:
         # Used by dict
         return self.rid == rhs.rid
-    
-    @classmethod
-    def get_dead_record(cls):
-        return cls(0)
-    

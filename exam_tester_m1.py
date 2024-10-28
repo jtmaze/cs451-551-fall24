@@ -1,5 +1,3 @@
-# %%
-
 from lstore.db import Database
 from lstore.query import Query
 
@@ -24,7 +22,6 @@ number_of_records = 1000
 number_of_aggregates = 100
 seed(3562901)
 
-
 for i in range(0, number_of_records):
     key = 92106429 + randint(0, number_of_records)
 
@@ -36,7 +33,6 @@ for i in range(0, number_of_records):
     query.insert(*records[key])
     # print('inserted', records[key])
 print("Insert finished")
-
 
 # Check inserted records using select query
 for key in records:
@@ -99,7 +95,6 @@ for key in records:
     if error:
         print('update error on', records[key], 'and', updated_columns, ':', record, ', correct:', updated_records[key])
 
-
 keys = sorted(list(records.keys()))
 # aggregate on every column 
 for c in range(0, grades_table.num_columns):
@@ -128,4 +123,3 @@ for c in range(0, grades_table.num_columns):
             print('sum error on [', keys[r[0]], ',', keys[r[1]], ']: ', updated_result, ', correct: ', updated_column_sum)
         else:
             pass
-

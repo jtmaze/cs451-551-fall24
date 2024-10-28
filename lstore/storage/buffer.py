@@ -46,6 +46,11 @@ class Buffer:
 
     def insert_record(self, columns: tuple[int]) -> RID:
         """
+        Creates a new RID and inserts a new record with the given data.
+
+        :param columns: New data values
+
+        :return: The created RID to be stored in the index
         """
         rid: RID = RID.from_params(is_base=1, tombstone=0)
 
@@ -63,7 +68,7 @@ class Buffer:
         """
         tail_rid: RID = RID.from_params(is_base=0, tombstone=0)
 
-        # Update
+        # Update and save to page directory (for bufferpool to find)
         self.page_dir[tail_rid] = self.bufferpool.update(
             rid, tail_rid, columns)
 
@@ -72,13 +77,13 @@ class Buffer:
         rid: RID,
         proj_col_idx: list[Literal[0, 1]],
         rel_version: int
-    ) -> Record | None:
+    ) -> Record:
         """
         :param rid: RID of base record to retrieve
         :param proj_col_idx: List of 0s or 1s indicating which columns to return
         :param rel_version: Relative version to return. 0 is latest, -<n> are prev
 
-        :return: Populated Record with data, or None if unsuccessful
+        :return: Populated Record associated with given RID
         """
         return self.bufferpool.read(rid, proj_col_idx, rel_version)
 
@@ -86,5 +91,12 @@ class Buffer:
         """
         Marks record as deleted by setting base record's indirection to special
         RID with tombstone == True
+
+        :param rid: The RID of the record to delete
         """
-        self.bufferpool.delete(rid)
+        # Create RID for deletion record
+        dead_rid = RID.from_params(0, 1)
+
+        # Update and save to page directory (for bufferpool to find)
+        self.page_dir[dead_rid] = self.bufferpool.update(
+            rid, dead_rid, tuple(None for _ in range(self.table.num_columns)))

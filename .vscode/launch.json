@@ -15,6 +15,15 @@
             ]
         },
         {
+            "name": "main",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/__main__.py",
+            "console": "integratedTerminal",
+            "args": [
+            ]
+        },
+        {
             "name": "m1_tester",
             "type": "debugpy",
             "request": "launch",

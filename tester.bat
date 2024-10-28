@@ -20,7 +20,9 @@ set "Test=%1"
 echo Test name: %Test%
 
 REM Run the appropriate test based on the given argument
-if "%Test%"=="1" (
+if "%Test%"=="main" (
+    py .\__main__.py > "%OutputDir%\__main__.txt"
+) else if "%Test%"=="1" (
     py .\m1_tester.py > "%OutputDir%\m1_tester.txt"
 ) else if "%Test%"=="2" (
     py .\m2_tester.py > "%OutputDir%\m2_tester.txt"
