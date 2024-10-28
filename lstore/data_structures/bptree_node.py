@@ -65,7 +65,7 @@ class BPTreeNode:
                 if key_delete == current_keys[i]:
                     del current_keys[i]
                     del current_values[i]
-                    print(f'Key: {key_delete} deleted')
+                    #print(f'Key: {key_delete} deleted')
                     return
                 
             print(f'Key {key_delete} not found')
@@ -80,7 +80,7 @@ class BPTreeNode:
         if self.is_leaf:
             for i in range(len(current_keys)):
                 if current_keys[i] == search_key:
-                    print(f'Key:{search_key} found in leaf node')
+                    #print(f'Key:{search_key} found in leaf node')
                     return current_vals[i]
             print(f'Key:{search_key} not found in leaf node')
             return None
@@ -115,4 +115,3 @@ class BPTreeNode:
 
         return(results, next_pointer)
 
-# %%
