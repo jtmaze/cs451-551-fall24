@@ -14,8 +14,16 @@ class DictIndex(IndexType):
         
         return [output]
 
-    def get_range(self, begin, end):
-        raise NotImplementedError()
+    def get_range(self, begin, end) -> list[RID]:
+        """
+            Takes in a begin key and end key
+            Returns list of RIDs of all keys inbetween
+        """ 
+        output = []
+        for val in range(begin, end + 1):
+            output.append(self.data.get(val, None))
+        
+        return output
 
     def insert(self, val, rid):
         self.data[val] = rid

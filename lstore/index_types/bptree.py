@@ -153,7 +153,7 @@ class BPTree:
        #print(f'Key:{key_search} not found in leaf node')
         return False # If the key/value pair is not found
     
-    def range_query_tree(self, key_low, key_high):
+    def get_range(self, key_low, key_high):
         """
         Performs range query on tree returns list of values
         """
@@ -190,7 +190,7 @@ class BPTreeIndex(IndexType):
             return values
         
     def get_range(self, begin, end):
-        results = self.tree.range_query_tree(begin, end)
+        results = self.tree.get_range(begin, end)
         # Will need to flatten results, becuase could have buckets in BPTree
         # i.e. multiple values per key
         flattened_results = [val for sublist in results for val in sublist]
