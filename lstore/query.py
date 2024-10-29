@@ -80,6 +80,9 @@ class Query:
         # Assume that select will never be called on a key that doesn't exist
         """
         return self._select_core(search_key, search_key_index, projected_columns_index, relative_version)
+    
+    def select_version_range(self, start_range, end_range, search_key_index, projected_columns_index, relative_version):
+        return self._select_core_range(start_range, end_range, search_key_index, projected_columns_index, relative_version)
 
     def update(self, primary_key, *columns) -> bool:
         """
@@ -162,6 +165,25 @@ class Query:
         except Exception as e:
             self._print_error(e)
             return False
+        
+    def _select_core_range(self, start_range, end_range, search_key_index, projected_columns_index, relative_version=0):
+        try: 
+            records = self.table.select_range(
+                start_range,
+                end_range,
+                search_key_index,
+                projected_columns_index,
+                relative_version
+            )
+
+            if not records:
+                return False
+            
+            return records
+        except Exception as e:
+            self._print_error(e)
+            return False
+        
 
     def _sum_core(self, start_range, end_range, aggregate_column_index, relative_version=0):
         """
@@ -169,12 +191,11 @@ class Query:
         """
         try:
             total_sum = 0
-            for key in range(start_range, end_range + 1):
-                records = self.select_version(
-                    key, self.table.key, [1] * self.table.num_columns, relative_version)
-                if records:
-                    for record in records:
-                        total_sum += record.columns[aggregate_column_index]
+            records = self.select_version_range(
+                    start_range, end_range, self.table.key, [1] * self.table.num_columns, relative_version)
+            if records:
+                for record in records:
+                    total_sum += record.columns[aggregate_column_index]
             return total_sum
         except Exception as e:
             self._print_error(e)

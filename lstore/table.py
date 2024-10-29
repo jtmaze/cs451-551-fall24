@@ -98,6 +98,27 @@ class Table:
                 print(f"Failed to find rid={rid}")
 
         return records
+    
+    def select_range(
+        self,
+        start_range: int,
+        end_range: int,
+        search_key_idx: int,
+        proj_col_idx: list[Literal[0, 1]],
+        rel_version: int = 0  # Default to newest tail (lastest version)
+    ) -> list[Record]:
+        rid_list = self.index.locate_range(start_range, end_range, search_key_idx)
+        records = []
+        for rid in rid_list:
+            try:
+                records.append(
+                    self.buffer.get_record(rid, proj_col_idx, rel_version)
+                )
+            except Exception as e:
+                print(f"Failed to find rid={rid}")
+
+        return records
+
 
     def update(self, rid: RID, columns: tuple[int]):
         """

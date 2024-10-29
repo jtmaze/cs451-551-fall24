@@ -45,8 +45,7 @@ class Index:
 
         # Collect all RIDs for values within the specified range
         result = []
-        for value in range(begin, end + 1):  # Assuming integer range for simplicity
-            result.extend(self.indices[column].get(value))
+        result.extend(self.indices[column].get_range(begin, end))
         return result
 
     def create_index(self, column_number):

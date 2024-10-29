@@ -5,6 +5,8 @@ from lstore.index_types.index_type import IndexType
 
 from lstore.index_types.bptree import BPTreeIndex
 
+from lstore.index_types.dict_index import DictIndex
+
 class IndexConfig:
     """
     index_type: Two options, for now: 1) BPTreeIndex 2) DictIndex (hash)
