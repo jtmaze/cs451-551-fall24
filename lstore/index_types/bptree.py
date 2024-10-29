@@ -1,6 +1,8 @@
 # %%
 import math
 
+from lstore import config
+
 from lstore.index_types.bptree_node import BPTreeNode
 from lstore.index_types.index_type import IndexType
 
@@ -29,7 +31,9 @@ class BPTree:
             self.split_node(leaf_node)
 
     def delete(self, key_delete):
-
+        """
+        TODO: Implement for persistent memory
+        """
         leaf_node = self.search_node(key_delete)
         leaf_node.leaf_delete(leaf_node, key_delete)
         
@@ -90,7 +94,8 @@ class BPTree:
             node_to_split.parent_node = new_root
             new_node.parent_node = new_root
             self.root = new_root
-            print(f'New root created on {new_root.keys}')
+            if config.DEBUG_PRINT:
+                print(f'New root created on {new_root.keys}')
 
         else:
             self.insert_at_parent(node_to_split.parent_node, sepperator, new_node)

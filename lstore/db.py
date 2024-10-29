@@ -1,5 +1,6 @@
 from lstore.table import Table
 
+from lstore.index_types.index_config import IndexConfig
 
 class Database():
 
@@ -21,14 +22,18 @@ class Database():
     :param key: int             #Index of table key in columns
     """
 
-    def create_table(self, name, num_columns, key_index):
+    def create_table(self, name, num_columns, key_index, index_config=None):
         """
         # Creates a new table
         :param name: string         #Table name
         :param num_columns: int     #Number of Columns: all columns are integer
         :param key: int             #Index of table key in columns
+        :param index_config
         """
-        table = Table(name, num_columns, key_index)
+        if index_config is None:
+            index_config = IndexConfig()
+
+        table = Table(name, num_columns, key_index, index_config)
         self.tables[name] = table  # Add the table to the database's table dictionary.
         return table
 

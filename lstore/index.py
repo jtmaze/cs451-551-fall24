@@ -7,14 +7,17 @@ this object.
 Indices are usually B-Trees, but other data structures can be used as well.
 """
 
-from lstore.index_types.index_type import IndexType
+from typing import Type
+
+from lstore.index_types.index_config import IndexConfig
+
+from lstore.index_types.bptree import BPTreeIndex
 
 class Index:
 
-    def __init__(self, table, key, num_columns, index_type):
+    def __init__(self, table, key, num_columns, index_config):
         self.table = table
-
-        self.index_type = index_type
+        self.index_config: IndexConfig = index_config
 
         # One index for each table. All our empty initially.
         self.indices = [None for _ in range(num_columns)]
@@ -50,9 +53,14 @@ class Index:
         """
         # optional: Create index on specific column
         """
+        cfg = self.index_config
+
         if self.indices[column_number] is None:
-            # Create a new dictionary to serve as the index for this column
-            self.indices[column_number] = self.index_type()
+            # Create a Index to serve as the index for this column
+            if cfg.index_type == BPTreeIndex:
+                self.indices[column_number] = cfg.index_type(cfg.node_size)
+            else:
+                self.indices[column_number] = cfg.index_type()
 
             self._populate_index(column_number)
 

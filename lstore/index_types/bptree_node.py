@@ -1,5 +1,7 @@
 import math
 
+from lstore import config
+
 class BPTreeNode:
     def __init__(self, n):
        
@@ -68,7 +70,8 @@ class BPTreeNode:
                     #print(f'Key: {key_delete} deleted')
                     return
                 
-            print(f'Key {key_delete} not found')
+            if config.DEBUG_PRINT:
+                print(f'Key {key_delete} not found')
         
 
     def point_query_node(self, search_key):
@@ -82,7 +85,10 @@ class BPTreeNode:
                 if current_keys[i] == search_key:
                     #print(f'Key:{search_key} found in leaf node')
                     return current_vals[i]
-            print(f'Key:{search_key} not found in leaf node')
+                
+            if config.DEBUG_PRINT:
+                print(f'Key:{search_key} not found in leaf node')
+                
             return None
         
 

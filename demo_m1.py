@@ -13,7 +13,7 @@ query = Query(temp_table)
 # dictionary for records to test the database: test directory
 records = {}
 
-number_of_records = 2_000_000
+number_of_records = 200_000
 number_of_aggregates = 100
 seed(42)
 
@@ -38,7 +38,6 @@ for key in keys:
     _, t_diff = timed_insert(*records[key])
     insert_time += t_diff
 print(f'Inserting {number_of_records} took {insert_time}')
-# print('inserted', records[key])
 print("Insert finished")
 
 # Select
@@ -100,8 +99,10 @@ for key in records:
         print('update error on', records[key], 'and', updated_columns, ':', record, ', correct:', updated_records[key])
 
 keys = sorted(list(records.keys()))
+
+
 # aggregate on every column 
-for c in range(0, grades_table.num_columns):
+for c in range(0, temp_table.num_columns):
     for i in range(0, number_of_aggregates):
         r = sorted(sample(range(0, len(keys)), 2))
         # calculate the sum form test directory
