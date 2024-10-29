@@ -84,9 +84,11 @@ class Query:
     def select_version_range(self, start_range, end_range, search_key_index, projected_columns_index, relative_version):
         return self._select_core_range(start_range, end_range, search_key_index, projected_columns_index, relative_version)
 
-    def update(self, primary_key, *columns) -> bool:
+    def update(self, primary_key, *columns: tuple[None | int]) -> bool:
         """
         # Update a record with specified key and columns
+        # :param primary_key: Primary key value, not index
+        # :param columns: Tuple of new values (or None if unchanged)
         # Returns True if update is succesful
         # Returns False if no records exist with given key or if the target record cannot be accessed due to 2PL locking
         """

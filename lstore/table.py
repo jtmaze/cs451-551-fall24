@@ -11,8 +11,6 @@ from lstore.storage.buffer import Buffer
 from lstore.storage.record import Record
 from lstore.storage.rid import RID
 
-from lstore.index_types.dict_index import DictIndex
-from lstore.index_types.bptree import BPTreeIndex
 from lstore.index_types.index_config import IndexConfig
 
 

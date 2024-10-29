@@ -121,7 +121,7 @@ class Bufferpool:
             if val is not None:
                 # Update schema by setting appropriate bit to 1
                 schema_encoding = schema_encoding | (1 << data_col)
-            elif config.CUMULATIVE_UPDATE:
+            else:
                 # Get previous value if cumulative
                 val = self._read_val(real_col, prev_indices[real_col])
 

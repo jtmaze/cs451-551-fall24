@@ -15,6 +15,9 @@ def _timeit(fn):
         return result, t1 - t0
     return wrapper
 
+def _get_total_cols(records):
+    return len(next(iter(records.values())))
+
 def create_records(num_columns, num_records, val_range=(0, 20)):
     records = dict()
 
@@ -30,7 +33,7 @@ def create_records(num_columns, num_records, val_range=(0, 20)):
 
     return records, key_range
 
-def test_insert(query: Query, records: dict[int, tuple[int]]):
+def test_insert(query: Query, records: dict[int, list[int]]):
     insert_time = 0.0
 
     timed_insert = _timeit(query.insert)
@@ -48,11 +51,15 @@ def test_insert(query: Query, records: dict[int, tuple[int]]):
 
 def test_select(
         query: Query,
-        records: dict[int, tuple[int]],
-        proj_col_idx: list[Literal[0, 1]]
+        records: dict[int, list[int]],
+        proj_col_idx: list[Literal[0, 1]] = None
 ):
-    # if len(proj_col_idx) != len(records[0]) - 1:
-    #     raise ValueError("Column projection shape does not match number of columns")
+    total_cols = _get_total_cols(records)
+
+    if proj_col_idx is None:
+        proj_col_idx = [1 for _ in range(total_cols)]
+    elif len(proj_col_idx) != total_cols:
+        raise ValueError("Column projection shape does not match number of columns")
 
     select_time = 0.0
     timed_select = _timeit(query.select)
@@ -77,37 +84,47 @@ def test_select(
     return select_time
 
 
-def test_update(
+def test_update_random(
     query: Query,
-    records: dict[int, tuple[int]], 
+    records: dict[int, list[int]], 
     num_cols_to_update: int = None,
     val_range=(0, 20)
 ):   
     """
+    Randomly chooses a given number of columns to updates values for.
+    
+    Updates the lists in records as well as the database.
     """
+    total_cols = _get_total_cols(records)
 
-    total_cols = len(records.values()[0])
-
+    # Update all columns if specific number not given
     if num_cols_to_update is None:
         num_cols_to_update = total_cols
 
+    # Randomly choose columns to update
     update_idx = random.sample(range(1, total_cols), num_cols_to_update)
 
     update_time = 0.0
-
     timed_update = _timeit(query.update)
 
     print("Beginning update...")
 
-    for _ in records:
+    for key, record in records.items():
         update_vals = [None for _ in range(total_cols)]
 
-        # For each column to be updated
+        # Get random number to update to for each column
         for idx in update_idx:
-            update_vals[idx] = random.randint(*val_range)
+            new_val = random.randint(*val_range)
+            update_vals[idx] = new_val
+            record[idx] = new_val
 
-        _, t_diff = timed_update(0, *update_vals)
+        _, t_diff = timed_update(key, *update_vals)
         update_time += t_diff
+
+        # Check correctness
+        new_record = query.select(key, 0, [1 for _ in range(total_cols)])[0]
+        if new_record.columns != record:
+            print(f"Update error: {new_record.columns} != {record}")
         
     print(f'Updating {len(records)} took {update_time}')
     print("Update finished")
@@ -116,20 +133,17 @@ def test_update(
 
 def test_sum(
     query: Query,
-    records: dict[int, tuple[int]], 
+    records: dict[int, list[int]], 
     start_range: int, # Start of key range
     end_range: int,   # End of key range
     agg_col_idx: int  # Index of column to aggregate
 ):
     sum_time = 0.0
-
-    
-
     timed_sum = _timeit(query.sum)
 
-    print("Beginning summation...")
+    print("Beginning summation ...")
 
-    for columns in records.values():
+    for _ in records.values():
         _, t_diff = timed_sum(start_range, end_range, agg_col_idx)
         sum_time += t_diff
         
