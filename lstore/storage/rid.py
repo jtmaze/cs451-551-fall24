@@ -84,8 +84,8 @@ class RID:
     def uid(self):
         return (self.rid & _FIELD_MASKS[_RIDField.UUID]) >> _RID_SHIFTS[_RIDField.UUID]
 
-    def to_bytes(self, length=8, byteorder="big"):
-        return self.rid.to_bytes(length, byteorder)
+    def to_bytes(self, length=8, byteorder="big", signed=True):
+        return self.rid.to_bytes(length, byteorder, signed=signed)
 
     def __hash__(self) -> int:
         return hash(self.rid)

@@ -13,7 +13,7 @@ class Page:
     def write(self, value):
         if self.has_capacity():
             start_index = self.num_records * config.RECORD_SIZE
-            self.data[start_index:start_index + config.RECORD_SIZE] = value.to_bytes(config.RECORD_SIZE, byteorder='big')
+            self.data[start_index:start_index + config.RECORD_SIZE] = value.to_bytes(config.RECORD_SIZE, byteorder='big', signed=True)
             self.num_records += 1
         else:
             # If the page is full, raise an exception
@@ -31,7 +31,7 @@ class Page:
         # Extract the bytes from the page's data starting at the offset
         value_bytes = self.data[offset:offset + config.RECORD_SIZE]
         # Convert the extracted bytes to an integer and return it
-        return int.from_bytes(value_bytes, byteorder='big')
+        return int.from_bytes(value_bytes, byteorder='big', signed=True)
     
     def update(self, val, offset):
         """
@@ -40,7 +40,7 @@ class Page:
         :param offset: The byte offset where the value should be updated.
         """
         # Convert the new value to bytes and overwrite the old data
-        self.data[offset:offset + config.RECORD_SIZE] = val.to_bytes(config.RECORD_SIZE, byteorder='big')
+        self.data[offset:offset + config.RECORD_SIZE] = val.to_bytes(config.RECORD_SIZE, byteorder='big', signed=True)
         
     def invalidate(self, rid):
         # TODO: Page 'deletion'
