@@ -34,7 +34,7 @@ class Query:
             self.table.delete(rid)
             return True
         except Exception as e:
-            print(f"{type(e)}: e")
+            self._print_error(e)
             return False
 
     def insert(self, *columns) -> bool:

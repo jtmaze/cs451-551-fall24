@@ -24,7 +24,7 @@ class _RIDField(IntEnum):
 _RID_BITS = (
     1,   # is_base
     1,   # tombstone
-    126, # UUID
+    62, # UUID
 )
 
 # Bit shift needed to get to field (ie cumulative field offset)

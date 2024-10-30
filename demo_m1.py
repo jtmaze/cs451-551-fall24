@@ -34,3 +34,6 @@ test_db.test_update_random(query, records, 6, val_range)
 
 # Sum sweltering days in June (col_idx=5)
 # test_db.test_sum(query, records, 70, 100, 5)
+
+# Delete records
+test_db.test_delete(query, records)

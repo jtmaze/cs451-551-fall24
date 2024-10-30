@@ -154,5 +154,29 @@ def test_sum(
 
 def test_delete(
     query: Query,
+    records: dict[int, list[int]]
 ):
-    pass
+    total_cols = _get_total_cols(records)
+    
+    delete_time = 0.0
+
+    timed_delete = _timeit(query.delete)
+
+    print("Beginning deletion...")
+
+    for key in records:
+        _, t_diff = timed_delete(key)
+        delete_time += t_diff
+
+        del_record = query.select(key, 0, [1 for _ in range(total_cols)])
+
+        if del_record:
+            # Get first record in list
+            del_record = del_record[0]
+            
+            print(f"Delete error: record {del_record.columns} still lives")
+        
+    print(f'Deleting {len(records)} took {delete_time}')
+    print("Delete finished")
+
+    return delete_time
