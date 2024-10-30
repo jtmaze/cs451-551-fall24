@@ -85,6 +85,8 @@ class RID:
         return (self.rid & _FIELD_MASKS[_RIDField.UUID]) >> _RID_SHIFTS[_RIDField.UUID]
 
     def to_bytes(self, length=8, byteorder="big", signed=True):
+        # TODO: Ensure signed=False works without getting in way of negative data ints
+        # TODO: Test larger lengths when fields are added
         return self.rid.to_bytes(length, byteorder, signed=signed)
 
     def __hash__(self) -> int:

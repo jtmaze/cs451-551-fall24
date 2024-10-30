@@ -13,6 +13,8 @@ from lstore.storage.rid import RID
 
 from lstore.index_types.index_config import IndexConfig
 
+from lstore import config
+
 
 class Table:
     """
@@ -92,8 +94,11 @@ class Table:
                 records.append(
                     self.buffer.get_record(rid, proj_col_idx, rel_version)
                 )
+            except KeyError:
+                pass
             except Exception as e:
-                print(f"Failed to find rid={rid}")
+                if config.DEBUG_PRINT:
+                    print(f"Failed to find rid={rid.rid}")
 
         return records
     
