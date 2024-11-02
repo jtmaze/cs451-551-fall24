@@ -18,13 +18,21 @@ def _timeit(fn):
 def _get_total_cols(records):
     return len(next(iter(records.values())))
 
-def create_records(num_columns, num_records, val_range=(0, 20)):
-    records = dict()
-
+def gen_keys(num_records: int, shuffle=True):
+    """Generates keys for the given number of records."""
     keys = list(range(num_records))
     key_range = (keys[0], keys[-1])
     
-    random.shuffle(keys)
+    if shuffle:
+        random.shuffle(keys)
+
+    return keys, key_range
+
+def create_records(num_columns: int, num_records: int, val_range=(0, 20)):
+    """Randomly creates records with the given specification (uniform sampling.)"""
+    records = dict()
+
+    keys, key_range = gen_keys(num_records)
 
     for key in keys:
         records[key] = [key] + [
@@ -45,7 +53,7 @@ def test_insert(query: Query, records: dict[int, list[int]]):
         insert_time += t_diff
         
     print(f'Inserting {len(records)} took {insert_time}')
-    print("Insert finished")
+    print("Insert finished\n")
 
     return insert_time
 
@@ -79,15 +87,15 @@ def test_select(
                 print(f'Error column {i + 1} does not match {records}')
 
     print(f'Selecting {len(records)} took {select_time}')
-    print("Select finished")
+    print("Select finished\n")
 
     return select_time
 
 
-def test_update_random(
+def test_update_random_uniform(
     query: Query,
     records: dict[int, list[int]], 
-    num_cols_to_update: int = None,
+    update_cols: int = None,
     val_range=(0, 20)
 ):   
     """
@@ -98,11 +106,11 @@ def test_update_random(
     total_cols = _get_total_cols(records)
 
     # Update all columns if specific number not given
-    if num_cols_to_update is None:
-        num_cols_to_update = total_cols
+    if update_cols is None:
+        update_cols = total_cols
 
     # Randomly choose columns to update
-    update_idx = random.sample(range(1, total_cols), num_cols_to_update)
+    update_idx = random.sample(range(1, total_cols), update_cols)
 
     update_time = 0.0
     timed_update = _timeit(query.update)
@@ -127,7 +135,7 @@ def test_update_random(
             print(f"Update error: {new_record.columns} != {record}")
         
     print(f'Updating {len(records)} took {update_time}')
-    print("Update finished")
+    print("Update finished\n")
 
     return update_time
 
@@ -138,19 +146,23 @@ def test_sum(
     end_range: int,   # End of key range
     agg_col_idx: int  # Index of column to aggregate
 ):
-    sum_time = 0.0
     timed_sum = _timeit(query.sum)
 
-    print("Beginning summation ...")
+    print(f"Beginning summation for keys {start_range} to {end_range}...")
 
-    for _ in records.values():
-        _, t_diff = timed_sum(start_range, end_range, agg_col_idx)
-        sum_time += t_diff
+    result, t_diff = timed_sum(start_range, end_range, agg_col_idx)
+
+    # Check correctness
+    real_sum = 0.0
+    for i in range(start_range, end_range + 1):
+        real_sum += records[i][agg_col_idx]
+    if result != real_sum:
+        print(f"Sum error: sum({start_range}, {end_range})={real_sum} not {result}")
         
-    print(f'Summing {len(records)} took {sum_time}')
-    print("Sum finished")
+    print(f'Summing took {t_diff}')
+    print("Sum finished\n")
 
-    return sum_time
+    return result, t_diff
 
 def test_delete(
     query: Query,
@@ -177,6 +189,6 @@ def test_delete(
             print(f"Delete error: record {del_record.columns} still lives")
         
     print(f'Deleting {len(records)} took {delete_time}')
-    print("Delete finished")
+    print("Delete finished\n")
 
     return delete_time
