@@ -52,7 +52,7 @@ def test_insert(query: Query, records: dict[int, list[int]]):
         _, t_diff = timed_insert(*columns)
         insert_time += t_diff
         
-    print(f'Inserting {len(records)} took {insert_time}')
+    print(f"Inserting {len(records):,} took {insert_time:.4f}s")
     print("Insert finished\n")
 
     return insert_time
@@ -79,14 +79,17 @@ def test_select(
         # Get record from returned list (point query)
         result: Record = result[0]
 
+        # Check correctness
+        j = 0 # Column index for projected result
         for i, include in enumerate(proj_col_idx):
             if not include:
                 continue
 
-            if result.columns[i] != record[i]:
+            if result.columns[j] != record[i]:
                 print(f'Error column {i + 1} does not match {records}')
+            j += 1
 
-    print(f'Selecting {len(records)} took {select_time}')
+    print(f"Selecting {len(records):,} took {select_time:.4f}s")
     print("Select finished\n")
 
     return select_time
@@ -100,9 +103,12 @@ def test_update_random(
     gen_params=(0, 20)
 ):   
     """
-    Randomly chooses a given number of columns to updates values for.
+    Randomly updates the given number of columns for each record.
+
+    Does so according to the given number generation function and associated
+    parameters (ex random.uniform(low, high), random.gauss(mean, stdev)).
     
-    Updates the lists in records as well as the database.
+    Updates the lists in records as well as the database values themselves.
     """
     total_cols = _get_total_cols(records)
 
@@ -135,7 +141,7 @@ def test_update_random(
         if new_record.columns != record:
             print(f"Update error: {new_record.columns} != {record}")
         
-    print(f'Updating {len(records)} took {update_time}')
+    print(f"Updating {len(records):,} took {update_time:.4f}s")
     print("Update finished\n")
 
     return update_time
@@ -160,7 +166,7 @@ def test_sum(
     if result != real_sum:
         print(f"Sum error: sum({start_range}, {end_range})={real_sum} not {result}")
         
-    print(f'Summing took {t_diff}')
+    print(f"Summing took {t_diff:.4f}s")
     print("Sum finished\n")
 
     return result, t_diff
@@ -183,13 +189,13 @@ def test_delete(
 
         del_record = query.select(key, 0, [1 for _ in range(total_cols)])
 
+        # Correctness check
         if del_record:
-            # Get first record in list
             del_record = del_record[0]
             
             print(f"Delete error: record {del_record.columns} still lives")
         
-    print(f'Deleting {len(records)} took {delete_time}')
+    print(f"Deleting {len(records):,} took {delete_time:.4f}s")
     print("Delete finished\n")
 
     return delete_time

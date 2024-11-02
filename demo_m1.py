@@ -6,10 +6,13 @@ import random
 from lstore.db import Database
 from lstore.query import Query
 
+from lstore.index_types.index_config import IndexConfig
+from lstore.index_types.bptree import BPTreeIndex
+from lstore.index_types.dict_index import DictIndex
+
 import test_db
 
 # FOR DEMO ONLY, not required for database implementation
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -31,11 +34,6 @@ def generate_eugene_temps(num_records, st_dev=7):
 
     return records
 
-def a_series_of_horrific_and_unprecedented_yearly_natural_disasters_and_anomalous_weather_phenomena_strike_eugene_oregon(query, records, months=6):
-    """Updates one monthly temperature per year  to potentially extreme values."""
-    test_db.test_update_random(query, records, update_cols=1,
-                               gen_fn=random.gauss, gen_params=(60, 50))
-
 def pause_break(live, msg=""):
     if live:
         input(msg + " (press enter to continue) ")
@@ -48,7 +46,7 @@ def plot_temps(df, title):
 
     plt.figure(figsize=(10, 7))
 
-    sns.stripplot(df.iloc[:, 1:], palette=monthly_colors_hex, size=2, alpha=0.4)
+    sns.stripplot(df.iloc[:, 1:], palette=monthly_colors_hex, size=2, alpha=0.32)
 
     plt.title(title)
     plt.xlabel("Month")
@@ -62,11 +60,15 @@ def plot_temps(df, title):
 
 def main(live=False):
     num_columns = 12 # Number of months
-    num_records = 10_000
+    num_records = 50_000
+
+    index_config = IndexConfig(DictIndex) # DictIndex or BPTreeIndex
+
+    pause_break(live, f"Creating database with index of type {index_config.index_type}")
 
     # Create database with table having num_columns (+ 1 for primary key)
     db = Database()
-    temp_table = db.create_table('MaxTemp', num_columns + 1, 0)
+    temp_table = db.create_table('MaxTemp', num_columns + 1, 0, index_config)
     query = Query(temp_table)
 
     random.seed(42)
@@ -79,7 +81,7 @@ def main(live=False):
 
     if live:
         df = pd.DataFrame(records).T
-        plot_temps(df, f"Eugene Temperatures for {num_records:,} Years")
+        plot_temps(df, f"Monthly Eugene Temperatures for {num_records:,} Years")
 
     print(f"Example record: {records[0]}\n")
 
@@ -87,38 +89,44 @@ def main(live=False):
 
     pause_break(live, "Timing insertion of records into database...")
 
-    # Insertion
     test_db.test_insert(query, records)
 
     # ---------------------
 
     pause_break(live, "Timing selection of all records...")
 
-    # Select
     test_db.test_select(query, records, None)
 
     # ---------------------
-    
-    pause_break(live, "Updating all records for a random month...")
 
-    # Update (changes records too)
-    a_series_of_horrific_and_unprecedented_yearly_natural_disasters_and_anomalous_weather_phenomena_strike_eugene_oregon(query, records)
+    pause_break(live, "Timing selection of one full column: November...")
+
+    test_db.test_select(
+        query, records, [0 if i != 11 else 1 for i in range(num_columns + 1)]
+    )
+
+    # ---------------------
+    
+    pause_break(live, "Updating records: YEARLY DEVASTATING AND UNPRECEDENTED WEATHER PHENOMENA HAVE HIT EUGENE OREGON...")
+
+    test_db.test_update_random(query, records, update_cols=1,
+                               gen_fn=random.randint, gen_params=(-100, 200))
+    
     print(f"New example record: {records[0]}\n")
 
     if live:
         df = pd.DataFrame(records).T
-        plot_temps(df, f"Updated Eugene Temperature for {num_records:,} Years")
+        plot_temps(df, f"Updated Monthly Eugene Temperature for {num_records:,} Years")
 
     # ---------------------
 
     pause_break(live, "Summing a millenia's worth of data...")
 
-    # Sum sweltering days in June
-    start_year = 1000
-    end_year = 2000
+    start_year = 10_000
+    end_year = 20_000
     col_idx = 6 # June (primary key is 0)
-    millenia_june_sum, _ = test_db.test_sum(query, records, start_year, end_year, col_idx)
-    print(f"Sum of June temps in first decade: {millenia_june_sum:.2f}\n")
+    decamillenia_june_sum, _ = test_db.test_sum(query, records, start_year, end_year, col_idx)
+    print(f"Sum of June temps in first decade: {decamillenia_june_sum:.2f}\n")
 
     # ---------------------
     
