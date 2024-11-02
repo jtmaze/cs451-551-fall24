@@ -6,7 +6,7 @@ import random
 from lstore.table import Record
 from lstore.query import Query
 
-def _timeit(fn):
+def timeit(fn):
     def wrapper(*args, **kwargs):
         t0 = time.process_time()
         result = fn(*args, **kwargs)
@@ -44,7 +44,7 @@ def create_records(num_columns: int, num_records: int, val_range=(0, 20)):
 def test_insert(query: Query, records: dict[int, list[int]]):
     insert_time = 0.0
 
-    timed_insert = _timeit(query.insert)
+    timed_insert = timeit(query.insert)
 
     print("Beginning insertion...")
 
@@ -70,7 +70,7 @@ def test_select(
         raise ValueError("Column projection shape does not match number of columns")
 
     select_time = 0.0
-    timed_select = _timeit(query.select)
+    timed_select = timeit(query.select)
 
     for key, record in records.items():
         result, t_diff = timed_select(key, 0, proj_col_idx)
@@ -92,11 +92,12 @@ def test_select(
     return select_time
 
 
-def test_update_random_uniform(
+def test_update_random(
     query: Query,
     records: dict[int, list[int]], 
     update_cols: int = None,
-    val_range=(0, 20)
+    gen_fn=random.uniform,
+    gen_params=(0, 20)
 ):   
     """
     Randomly chooses a given number of columns to updates values for.
@@ -109,20 +110,20 @@ def test_update_random_uniform(
     if update_cols is None:
         update_cols = total_cols
 
-    # Randomly choose columns to update
-    update_idx = random.sample(range(1, total_cols), update_cols)
-
     update_time = 0.0
-    timed_update = _timeit(query.update)
+    timed_update = timeit(query.update)
 
     print("Beginning update...")
 
     for key, record in records.items():
         update_vals = [None for _ in range(total_cols)]
 
+        # Randomly choose columns to update
+        update_idx = random.sample(range(1, total_cols), update_cols)
+
         # Get random number to update to for each column
         for idx in update_idx:
-            new_val = random.randint(*val_range)
+            new_val = int(round(gen_fn(*gen_params), 0))
             update_vals[idx] = new_val
             record[idx] = new_val
 
@@ -146,7 +147,7 @@ def test_sum(
     end_range: int,   # End of key range
     agg_col_idx: int  # Index of column to aggregate
 ):
-    timed_sum = _timeit(query.sum)
+    timed_sum = timeit(query.sum)
 
     print(f"Beginning summation for keys {start_range} to {end_range}...")
 
@@ -172,7 +173,7 @@ def test_delete(
     
     delete_time = 0.0
 
-    timed_delete = _timeit(query.delete)
+    timed_delete = timeit(query.delete)
 
     print("Beginning deletion...")
 
