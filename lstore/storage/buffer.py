@@ -14,7 +14,7 @@ indices are for accessing data via this bufferpool.
 
 from typing import Literal
 
-from lstore.storage.bufferpool import Bufferpool
+from lstore.storage.bufferpool.bufferpool import Bufferpool
 from lstore.storage.record_index import RecordIndex
 from lstore.storage.disk import Disk
 from lstore.storage.rid import RID
