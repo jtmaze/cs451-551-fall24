@@ -43,9 +43,24 @@ class Bufferpool:
             dict() for _ in range(self.total_columns)
         ]
 
+    def pin_page(self, page_id):
+        """Increment the pin count for a specific page to prevent eviction."""
+        for column in self.pages:
+            if page_id in column:
+                page = column[page_id]
+                page.pin_count += 1
+
+    def unpin_page(self, page_id):
+        """Decrement the pin count for a specific page, allowing for eviction."""
+        for column in self.pages:
+            if page_id in column:
+                page = column[page_id]
+                page.pin_count = max(0, page.pin_count - 1)
+
     def write(self, rid: RID, columns: tuple[int]) -> list[RecordIndex]:
         """
         Writes a new record with the given data columns.
+        Marks the page as dirty if modified.
 
         Returns a list of RecordIndex objects to be used as values in the
         page directory.
@@ -74,7 +89,7 @@ class Bufferpool:
 
     def update(self, rid: RID, tail_rid: RID, columns: tuple[int | None]):
         """
-        'Updates' a record by creating a new tail record.
+        'Updates' a record by creating a new tail record and marks page as dirty.
 
         The indirection pointer of the base record and previous newest tail
         record are changed accordingly. The schema encoding of the base
@@ -181,7 +196,7 @@ class Bufferpool:
 
     def _write_val(self, col: int, val: int) -> RecordIndex:
         """
-        Writes the given value to the last page in the given column.
+        Writes the given value to the last page in the given column, marking it as dirty.
 
         If full, allocates a new page and writes there.
         """
@@ -202,17 +217,19 @@ class Bufferpool:
                 raise NotImplementedError(
                     "Max buffer size specified, but not implemented yet")
 
+        page.is_dirty = True
         offset = page.write(val)
 
         return RecordIndex(page.id, offset)
 
     def _overwrite_val(self, rid: RID, col: int, val: int):
         """
-        Overwrites a value in a page.
+        Overwrites a value in a page, marking it as dirty.
         """
         r_idx: RecordIndex = self.table.buffer.page_dir[rid][col]
-
-        self.pages[col][r_idx.page_id].update(val, r_idx.offset)
+        page = self.pages[col][r_idx.page_id]
+        page.update(val, r_idx.offset)
+        page.is_dirty = True
 
     def _read_val(self, col: int, r_idx: RecordIndex):
         """
