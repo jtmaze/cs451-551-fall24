@@ -9,22 +9,19 @@ from typing import Literal
 
 from enum import IntEnum
 
-import uuid
-
-
 # Setup -----------------------------------------
 
 class _RIDField(IntEnum):
     """RID attribute index"""
-    IS_BASE = 0
-    TOMBSTONE = 1
-    UUID = 2
+    ID_NUM = 0
+    IS_BASE = 1
+    TOMBSTONE = 2
 
 
 _RID_BITS = (
+    48,  # ID
     1,   # is_base
     1,   # tombstone
-    62, # UUID
 )
 
 # Bit shift needed to get to field (ie cumulative field offset)
@@ -46,6 +43,7 @@ _FIELD_MASKS = tuple(
 # Class -----------------------------------------
 
 class RID:
+    ctr = 2 ** _RID_BITS[_RIDField.ID_NUM]
 
     def __init__(self, rid_int: int):
         self._rid = rid_int
@@ -55,14 +53,17 @@ class RID:
         """
         Constructor with parameters. ex rid = RID.from_params(...)
         """
+        # Set ID and ensure correct amount of bits
+        id = RID.ctr & _RID_MASKS[_RIDField.ID_NUM]
+        RID.ctr -= 1
+
         # Ensure correct amount of bits
         is_base &= _RID_MASKS[_RIDField.IS_BASE]
         tombstone &= _RID_MASKS[_RIDField.TOMBSTONE]
-        id = uuid.uuid4().int & _RID_MASKS[_RIDField.UUID]
 
         # Shift and combine fields into integer
         rid_int = 0
-        for i, field in enumerate((is_base, tombstone, id)):
+        for i, field in enumerate((id, is_base, tombstone)):
             rid_int |= (field << _RID_SHIFTS[i])
 
         # Create object and return
@@ -73,16 +74,16 @@ class RID:
         return self._rid
 
     @property
+    def uid(self):
+        return (self.rid & _FIELD_MASKS[_RIDField.ID_NUM]) >> _RID_SHIFTS[_RIDField.ID_NUM]
+    
+    @property
     def is_base(self):
         return (self.rid & _FIELD_MASKS[_RIDField.IS_BASE]) >> _RID_SHIFTS[_RIDField.IS_BASE]
 
     @property
     def tombstone(self):
         return (self.rid & _FIELD_MASKS[_RIDField.TOMBSTONE]) >> _RID_SHIFTS[_RIDField.TOMBSTONE]
-
-    @property
-    def uid(self):
-        return (self.rid & _FIELD_MASKS[_RIDField.UUID]) >> _RID_SHIFTS[_RIDField.UUID]
 
     def to_bytes(self, length=8, byteorder="big", signed=True):
         # TODO: Ensure signed=False works without getting in way of negative data ints
