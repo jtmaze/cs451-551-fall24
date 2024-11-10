@@ -35,12 +35,16 @@ class Bufferpool:
 
         self.curr_page_id = 0  # Total pages created in memory
         self.page_count = 0    # Current number of pages
-        self.max_buffer_size = config.MAX_BUFFER_SIZE
+        self.max_buffer_size = config.MAX_BUFFER_PAGES
 
         # Maps page id -> page for each column (including metadata)
         self.pages = [
             dict() for _ in range(self.tcols)
         ]
+
+        self.base = [OrderedDict() for _ in range(self.tcols)]
+
+        self.tail = [OrderedDict() for _ in range(self.tcols)]
 
     def pin_page(self, page_id):
         """Increment the pin count for a specific page to prevent eviction."""
