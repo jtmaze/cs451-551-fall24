@@ -142,9 +142,35 @@ class Table:
         """
         self.buffer.delete_record(rid)
 
+
+    def flush_pages(self):
+        """
+        Writes all dirty pages in the buffer pool to disk and marks them as clean.
+        """
+        for col_index, column_pages in enumerate(self.buffer.bufferpool.pages):
+            for page_id, page in column_pages.items():
+                if page.is_dirty:
+                    # disk write function
+                    # something like: self.buffer.disk.write_page(page_id, page.data)
+                    # After writing to disk, mark page as clean
+                    page.is_dirty = False
+                    print(f"Flushed page {page_id} in column {col_index} to disk.")
+
+    # Clear tables in memory
+    def clear(self):
+        """
+        Clears in-memory pages from the table, making sure to flush all dirty pages first.
+        """
+        self.flush_pages()  # Ensure all data is safely written to disk
+            # Clear the page directory mapping RIDs to in-memory pages with something like:
+            #self.buffer.page_dir.clear()
+            #self.buffer.bufferpool.pages = [dict() for _ in range(self.buffer.bufferpool.total_columns)]
+        print("Cleared all in-memory pages from the table.")
+
     def __del__(self):
         """
         Table destructor. Writes pages only in memory to disk.
         """
         # TODO: Write buffer pages to disk
         pass
+
