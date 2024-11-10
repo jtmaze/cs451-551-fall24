@@ -7,9 +7,10 @@ buffer and indices for performant querying.
 from typing import Literal
 
 from lstore.index import Index
-from lstore.storage.buffer import Buffer
+from lstore.storage.buffer.buffer import Buffer
 from lstore.storage.record import Record
 from lstore.storage.rid import RID
+from lstore.storage.meta_col import MetaCol
 
 from lstore.index_types.index_config import IndexConfig
 
@@ -35,8 +36,10 @@ class Table:
             raise IndexError("Key index is greater than the number of columns")
 
         self.name = name
-        self.num_columns = num_columns
         self.key = key
+
+        self.num_columns = num_columns
+        self.num_total_cols = num_columns + len(MetaCol)
 
         # Given RID, returns records (checks bufferpool before disk)
         self.buffer = Buffer(self)
