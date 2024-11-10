@@ -41,7 +41,7 @@ def create_records(num_columns: int, num_records: int, val_range=(0, 20)):
 
     return records, key_range
 
-def test_insert(query: Query, records: dict[int, list[int]]):
+def demo_insert(query: Query, records: dict[int, list[int]]):
     insert_time = 0.0
 
     timed_insert = timeit(query.insert)
@@ -57,7 +57,7 @@ def test_insert(query: Query, records: dict[int, list[int]]):
 
     return insert_time
 
-def test_select(
+def demo_select(
         query: Query,
         records: dict[int, list[int]],
         proj_col_idx: list[Literal[0, 1]] = None
@@ -95,7 +95,7 @@ def test_select(
     return select_time
 
 
-def test_update_random(
+def demo_update_random(
     query: Query,
     records: dict[int, list[int]], 
     update_cols: int = None,
@@ -146,7 +146,7 @@ def test_update_random(
 
     return update_time
 
-def test_sum(
+def demo_sum(
     query: Query,
     records: dict[int, list[int]], 
     start_range: int, # Start of key range
@@ -171,7 +171,7 @@ def test_sum(
 
     return result, t_diff
 
-def test_delete(
+def demo_delete(
     query: Query,
     records: dict[int, list[int]]
 ):
