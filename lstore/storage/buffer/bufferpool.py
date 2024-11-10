@@ -8,8 +8,7 @@ from typing import Literal
 
 import time
 
-# TODO: For LRU page cache, but large memory footprint
-# from collections import OrderedDict
+from collections import OrderedDict # MRU cache
 
 from lstore.storage.record import Record
 from lstore.storage.meta_col import MetaCol
@@ -26,13 +25,13 @@ class Bufferpool:
     A simple bufferpool that uses a hash table to store pages in memory,
     using RIDs (Record IDs) as keys.
 
-    :param table: Reference to parent table for things like num_columns
+    :param table: Reference to parent table
     """
 
     def __init__(self, table):
         self.table = table
 
-        self.total_columns = MetaCol.COL_COUNT + self.table.num_columns
+        self.tcols = self.table.num_total_cols
 
         self.curr_page_id = 0  # Total pages created in memory
         self.page_count = 0    # Current number of pages
@@ -40,7 +39,7 @@ class Bufferpool:
 
         # Maps page id -> page for each column (including metadata)
         self.pages = [
-            dict() for _ in range(self.total_columns)
+            dict() for _ in range(self.tcols)
         ]
 
     def pin_page(self, page_id):
@@ -70,19 +69,17 @@ class Bufferpool:
 
         :return: List of composite RecordIndices to store as val in page dir
         """
-        record_indices = [None for _ in range(self.total_columns)]
+        record_indices = [None for _ in range(self.tcols)]
 
         # Write metadata, saving record indices per column
         record_indices[MetaCol.INDIR] = self._write_val(MetaCol.INDIR, rid)
         record_indices[MetaCol.RID] = self._write_val(MetaCol.RID, rid)
-        record_indices[MetaCol.TIME] = self._write_val(
-            MetaCol.TIME, self._get_timestamp())
         record_indices[MetaCol.SCHEMA] = self._write_val(MetaCol.SCHEMA, 0)
 
         # Write data, saving record indices per remaining columns
-        for i in range(MetaCol.COL_COUNT, self.total_columns):
+        for i in range(len(MetaCol), self.tcols):
             record_indices[i] = self._write_val(
-                i, columns[i - MetaCol.COL_COUNT])
+                i, columns[i - len(MetaCol)])
 
         # Return indices to be stored as values in page directory
         return record_indices
@@ -106,7 +103,7 @@ class Bufferpool:
 
         self._validate_not_deleted(rid, base_indices)
 
-        tail_indices = [None for _ in range(self.total_columns)]
+        tail_indices = [None for _ in range(self.tcols)]
 
         # Indirection -----------------
 
@@ -116,11 +113,9 @@ class Bufferpool:
             MetaCol.INDIR, prev_rid)
         self._overwrite_val(rid, MetaCol.INDIR, tail_rid)
 
-        # RID & Timestamp -------------
+        # RID ----------- -------------
 
         tail_indices[MetaCol.RID] = self._write_val(MetaCol.RID, tail_rid)
-        tail_indices[MetaCol.TIME] = self._write_val(
-            MetaCol.TIME, self._get_timestamp())
 
         # Schema encoding & data ------
 
@@ -131,7 +126,7 @@ class Bufferpool:
 
         # Go through columns while updating schema encoding and data
         for data_col, val in enumerate(columns):
-            real_col = MetaCol.COL_COUNT + data_col
+            real_col = len(MetaCol) + data_col
 
             if val is not None:
                 # Update schema by setting appropriate bit to 1
@@ -180,14 +175,14 @@ class Bufferpool:
         #       proj_col_idx = [0, 1, 1]
         #       --------------------------
         #       record_indices = [(1, (p_1, o_1)), (2, (p_2, o_2))]
-        data_indices = record_indices[MetaCol.COL_COUNT:]
+        data_indices = record_indices[len(MetaCol):]
         data_indices: list[tuple[int, RecordIndex]] = [
             (col_idx, r_idx) for col_idx, r_idx in enumerate(data_indices) if proj_col_idx[col_idx]
         ]
 
         columns = []
         for col_idx, r_idx in data_indices:
-            columns.append(self._read_val(col_idx + MetaCol.COL_COUNT, r_idx))
+            columns.append(self._read_val(col_idx + len(MetaCol), r_idx))
 
         return Record(self.table.key, columns, rid)
 

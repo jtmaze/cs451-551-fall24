@@ -14,7 +14,9 @@ indices are for accessing data via this bufferpool.
 
 from typing import Literal
 
-from lstore.storage.bufferpool.bufferpool import Bufferpool
+from lstore.storage.buffer.write_queue import WriteQueue
+from lstore.storage.buffer.bufferpool import Bufferpool
+
 from lstore.storage.record_index import RecordIndex
 from lstore.storage.disk import Disk
 from lstore.storage.rid import RID
@@ -26,13 +28,15 @@ class Buffer:
     """
     Buffer with page directory and bufferpool.
 
-    :param table: Reference to parent table for things like num_columns
+    :param table: Reference to parent table
     """
 
     def __init__(self, table) -> None:
         self.table = table
 
         # In memory -------------------
+
+        self.write_queue = WriteQueue(self.table)
 
         # Maps RIDs to (logical page ID, offset) pairs per column
         self.page_dir: dict[RID, list[RecordIndex]] = dict()
@@ -99,4 +103,4 @@ class Buffer:
 
         # Update and save to page directory (for bufferpool to find)
         self.page_dir[dead_rid] = self.bufferpool.update(
-            rid, dead_rid, tuple(None for _ in range(self.table.num_columns)))
+            rid, dead_rid, tuple(None for _ in range(self.table.num_total_cols)))
