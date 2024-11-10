@@ -1,4 +1,8 @@
 import sys
+import os
+
+# Add root dir to path to find lstore
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from time import process_time
 import random
@@ -10,7 +14,7 @@ from lstore.index_types.index_config import IndexConfig
 from lstore.index_types.bptree import BPTreeIndex
 from lstore.index_types.dict_index import DictIndex
 
-import test_db
+import demo.demo_utils as demo_utils
 
 # FOR DEMO ONLY, not required for database implementation
 import pandas as pd
@@ -27,7 +31,7 @@ def generate_eugene_temps(num_records, st_dev=7):
     eugene_means = [(h + l) / 2 for h, l in zip(highs, lows)] 
     eugene_stdev = st_dev
 
-    keys, _ = test_db.gen_keys(num_records)
+    keys, _ = demo_utils.gen_keys(num_records)
     records = dict()
     for key in keys:
         records[key] = [key] +  [int(random.gauss(mean, eugene_stdev)) for mean in eugene_means]
@@ -89,19 +93,19 @@ def main(live=False):
 
     pause_break(live, "Timing insertion of records into database...")
 
-    test_db.test_insert(query, records)
+    demo_utils.demo_insert(query, records)
 
     # ---------------------
 
     pause_break(live, "Timing selection of all records...")
 
-    test_db.test_select(query, records, None)
+    demo_utils.demo_select(query, records, None)
 
     # ---------------------
 
     pause_break(live, "Timing selection of one full column: November...")
 
-    test_db.test_select(
+    demo_utils.demo_select(
         query, records, [0 if i != 11 else 1 for i in range(num_columns + 1)]
     )
 
@@ -109,7 +113,7 @@ def main(live=False):
     
     pause_break(live, "Updating records: YEARLY DEVASTATING AND UNPRECEDENTED WEATHER PHENOMENA HAVE HIT EUGENE OREGON...")
 
-    test_db.test_update_random(query, records, update_cols=1,
+    demo_utils.demo_update_random(query, records, update_cols=1,
                                gen_fn=random.randint, gen_params=(-100, 200))
     
     print(f"New example record: {records[0]}\n")
@@ -125,7 +129,7 @@ def main(live=False):
     start_year = 10_000
     end_year = 20_000
     col_idx = 6 # June (primary key is 0)
-    decamillenia_june_sum, _ = test_db.test_sum(query, records, start_year, end_year, col_idx)
+    decamillenia_june_sum, _ = demo_utils.demo_sum(query, records, start_year, end_year, col_idx)
     print(f"Sum of June temps in first decade: {decamillenia_june_sum:.2f}\n")
 
     # ---------------------
@@ -133,7 +137,7 @@ def main(live=False):
     pause_break(live, "Timing deletion of records from database...")
 
     # Delete records
-    test_db.test_delete(query, records)
+    demo_utils.demo_delete(query, records)
 
 ################################
 
