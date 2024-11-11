@@ -6,8 +6,6 @@ offsets.
 
 from typing import Literal
 
-import time
-
 from collections import OrderedDict # MRU cache
 
 from lstore.storage.record import Record
@@ -40,9 +38,12 @@ class Bufferpool:
         # Global page table for MRU eviction
         self.page_table = OrderedDict()  # Maps page_id -> page object
         
-        # Pointers to pages in page_table
-        self.bases = [OrderedDict() for _ in range(self.tcols)]
-        self.tails = [OrderedDict() for _ in range(self.tcols)]
+        # Pointers to pages in page_table (used as ordered sets)
+        self.base_trackers = [OrderedDict() for _ in range(self.tcols)]
+        self.tail_trackers = [OrderedDict() for _ in range(self.tcols)]
+
+        # Maps page id to (tracker, col idx) for evictions
+        self.reverse_tracker = dict()
 
     def write(self, rid: RID, columns: tuple[int]) -> list[RecordIndex]:
         """
@@ -60,14 +61,14 @@ class Bufferpool:
         record_indices = [None for _ in range(self.tcols)]
 
         # Write metadata, saving record indices per column
-        record_indices[MetaCol.INDIR] = self._write_val(MetaCol.INDIR, rid, self.bases)
-        record_indices[MetaCol.RID] = self._write_val(MetaCol.RID, rid, self.bases)
-        record_indices[MetaCol.SCHEMA] = self._write_val(MetaCol.SCHEMA, 0, self.bases)
+        record_indices[MetaCol.INDIR] = self._write_val(MetaCol.INDIR, rid, self.base_trackers)
+        record_indices[MetaCol.RID] = self._write_val(MetaCol.RID, rid, self.base_trackers)
+        record_indices[MetaCol.SCHEMA] = self._write_val(MetaCol.SCHEMA, 0, self.base_trackers)
 
         # Write data, saving record indices per remaining columns
         for i in range(len(MetaCol), self.tcols):
             record_indices[i] = self._write_val(
-                i, columns[i - len(MetaCol)], self.bases)
+                i, columns[i - len(MetaCol)], self.base_trackers)
 
         # Return indices to be stored as values in page directory
         return record_indices
@@ -96,12 +97,12 @@ class Bufferpool:
         # Set new tail indir to prev tail rid and base indir to new rid
         prev_rid = RID(self._read_meta(base_indices, MetaCol.INDIR))
         tail_indices[MetaCol.INDIR] = self._write_val(
-            MetaCol.INDIR, prev_rid, self.tails)
+            MetaCol.INDIR, prev_rid, self.tail_trackers)
         self._overwrite_val(rid, MetaCol.INDIR, tail_rid)
 
         # RID ----------- -------------
 
-        tail_indices[MetaCol.RID] = self._write_val(MetaCol.RID, tail_rid, self.tails)
+        tail_indices[MetaCol.RID] = self._write_val(MetaCol.RID, tail_rid, self.tail_trackers)
 
         # Schema encoding & data ------
 
@@ -121,11 +122,11 @@ class Bufferpool:
                 # Get previous value if cumulative
                 val = self._read_val(real_col, prev_indices[real_col])
 
-            tail_indices[real_col] = self._write_val(real_col, val, self.tails)
+            tail_indices[real_col] = self._write_val(real_col, val, self.tail_trackers)
 
         # Write both base and new tail record schema encoding
         tail_indices[MetaCol.SCHEMA] = self._write_val(
-            MetaCol.SCHEMA, schema_encoding, self.tails)
+            MetaCol.SCHEMA, schema_encoding, self.tail_trackers)
         self._overwrite_val(rid, MetaCol.SCHEMA, schema_encoding)
 
         return tail_indices
@@ -174,17 +175,15 @@ class Bufferpool:
 
     def pin_page(self, page_id):
         """Increment the pin count for a specific page to prevent eviction."""
-        for column in self.pages:
-            if page_id in column:
-                page = column[page_id]
-                page.pin_count += 1
+        page = self.page_table.get(page_id)
+        if page:
+            page.pin_count += 1
 
     def unpin_page(self, page_id):
         """Decrement the pin count for a specific page, allowing for eviction."""
-        for column in self.pages:
-            if page_id in column:
-                page = column[page_id]
-                page.pin_count = max(0, page.pin_count - 1)
+        page = self.page_table.get(page_id)
+        if page:
+            page.pin_count = max(0, page.pin_count - 1)
 
     # Helpers ------------------------
 
@@ -200,13 +199,6 @@ class Bufferpool:
         pass
 
     def _evict_page(self):
-        def __delete_page_from_trackers():
-            for pdicts in (self.bases, self.tails):
-                for pdict in pdicts:
-                    if page_id in pdict:
-                        del pdict[page_id]
-                        return
-
         # Search for most recently used UNPINNED page to evict from cache
         for page_id in reversed(self.page_table):
             page = self.page_table[page_id]
@@ -214,7 +206,10 @@ class Bufferpool:
             if page.pin_count <= 0:
                 del self.page_table[page_id]
 
-                __delete_page_from_trackers()
+                # Delete page from tracker
+                if page_id in self.reverse_tracker:
+                    tracker, col = self.reverse_tracker.pop(page_id)
+                    del tracker[col][page_id]
 
                 # Cleanup
                 self.page_count -= 1
@@ -226,16 +221,16 @@ class Bufferpool:
         raise RuntimeWarning("Tried to evict a page, but no unpinned pages available!")
 
 
-    def _write_val(self, col: int, val: int, pages_dicts: list[OrderedDict]) -> RecordIndex:
+    def _write_val(self, col: int, val: int, page_trackers: list[OrderedDict]) -> RecordIndex:
         """
         Writes the given value to the last page in the given column, marking it as dirty.
 
         If full, allocates a new page and writes there.
         """
-        pdict = pages_dicts[col]
+        ptrack = page_trackers[col]
 
-        if pdict:
-            pid = next(reversed(pdict))
+        if ptrack:
+            pid = next(reversed(ptrack))
             page = self.page_table[pid]
         else:
             page = None
@@ -243,8 +238,8 @@ class Bufferpool:
         if page is None or not page.has_capacity():
             page = self._create_new_page()
 
-            pdict[page.id] = None  # Value doesn't matter, used as ordered set
-            self.page_table[page.id] = page
+            ptrack[page.id] = None  # Value doesn't matter, used as ordered set
+            self.reverse_tracker[page.id] = (page_trackers, col)
 
             # Update page table (and address MRU eviction)
             self.page_table[page.id] = page

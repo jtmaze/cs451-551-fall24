@@ -14,11 +14,9 @@ indices are for accessing data via this bufferpool.
 
 from typing import Literal
 
-from lstore.storage.buffer.page_dir import PageDirectory
 from lstore.storage.buffer.bufferpool import Bufferpool
 
 from lstore.storage.record_index import RecordIndex
-from lstore.storage.meta_col import MetaCol
 from lstore.storage.disk import Disk
 from lstore.storage.rid import RID
 
