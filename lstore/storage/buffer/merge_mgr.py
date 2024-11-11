@@ -1,10 +1,15 @@
 """
 # Steps for merge algorithm:
 #1. Identify the committed tail records in tail pages
-#2. Load the corresponding outdate base pages
+#2. Load the corresponding outdated base pages
 #3. Consolidate the base and tail pages
 #4. Update the page directory
 #5. De-allocate the outdate base pages
+
+# Design questions:
+- Granularity of the merge operation: base page level, or the page range level??
+- How can we load the tail-records in descending order of update time? This makes the merge algorithm more efficient.
+- 
 """
 
 from collections import namedtuple
@@ -16,9 +21,11 @@ from lstore.storage.disk import Disk
 
 class MergeManager:
     """
-    Returns a new consilidated set of read only base pages.
+    Returns a new consolidated set of read only base pages.
     """
     def __init__(self, original_tail_pages, original_base_pages):
+
+        self.merge_threshold = None # Set merge threshold in config.py??
 
         pass
 
@@ -40,17 +47,69 @@ class MergeManager:
         """
         Conceuptually, a left-outer join
         Inputs: a list of base page_ids and a list of tail page_ids
-        Returns: a dictionary with read only base pages.
+        Returns: a dictionary with updated read only base pages.
         """
         # How to get the base and tail page_ids???
         original_base_records = self.load_committed_pages(self.base_page_ids, is_base=True) 
         committed_tail_records = self.load_committed_pages(self.tail_page_ids, is_base=False)
+        new_base_records = original_base_records.copy() 
+
+        latest_tail_records = {}
+
+        # Find the latest tail record for each base RID
+        for tail_rid in reversed(sorted(self.tail_records.keys())):
+            tail_record = self.tail_records[tail_rid]
+            base_rid = tail_record['base_rid'] # TODO: Method to get base RID from tail record's indirection if not stored. 
+            if base_rid not in latest_tail_records:
+                latest_tail_records[base_rid] = tail_record
+
+        # Apply the latest tail record to the base record
+        for base_rid, base_record in self.base_records.items():
+            if base_rid not in new_base_records:
+                tail_record = latest_tail_records[base_rid]
+                new_base_record = self.apply_tail_to_base(new_base_records[base_rid], tail_record)
+                new_base_records[base_rid] = new_base_record
+            else:
+                pass
+
+        # # Prevents double checking the same base record
+        # checked_base_records = set()
         
+        # # Get the base RID assocaited with a given tail record.
+        # for r in committed_tail_records:
+        #     base_rid_column = 'X' #??? Is the base RID stored in the tail record column?
+        #     base_rid = r[base_rid_column] 
+        #     #OR make method like if base RID not stored in tail records:
+        #     # r.get_base_rid()??? Method would follow indirection column to find the base RID.
 
-        new_base_records = {}
+        #     if base_rid in checked_base_records:
+        #         continue
+        #     else:
+        #         tail_rid = r['rid'] # Tail record's RID column number?
+        #         new_base_records.update(r) 
 
+        #         checked_base_records.update(base_rid)
+                
         return new_base_records
     
+    def apply_tail_to_base(self, base_record, tail_record):
+        """
+        Inputs: a base record and a 
+        Returns: a new base record with the tail record applied."""
+
+        new_base_record = base_record.copy() 
+        schema_encoding = tail_record['schema_encoding']
+
+        for i, column_changed in enumerate(schema_encoding):
+            if column_changed:
+                new_base_record['columns'][i] = tail_record['columns'][i]
+
+        new_base_record['last_update_time'] = tail_record['last_update_time']
+        new_base_record['schema_encoding'] = tail_record['schema_encoding']
+
+        return new_base_record
+
+
     def update_page_directory(self):
         """
         Rearranges pointers in the page directory (record_index.py?)
