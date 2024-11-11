@@ -102,4 +102,4 @@ class Buffer:
 
         # Update and save to page directory (for bufferpool to find)
         self.page_dir[dead_rid] = self.bufferpool.update(
-            rid, dead_rid, tuple(None for _ in range(self.table.num_total_cols)))
+            rid, dead_rid, tuple(None for _ in range(self.table.num_columns)))

@@ -41,8 +41,8 @@ class Bufferpool:
         self.page_table = OrderedDict()  # Maps page_id -> page object
         
         # Pointers to pages in page_table
-        self.bases = [[] for _ in range(self.tcols)]
-        self.tails = [[] for _ in range(self.tcols)]
+        self.bases = [OrderedDict() for _ in range(self.tcols)]
+        self.tails = [OrderedDict() for _ in range(self.tcols)]
 
     def write(self, rid: RID, columns: tuple[int]) -> list[RecordIndex]:
         """
@@ -200,27 +200,54 @@ class Bufferpool:
         pass
 
     def _evict_page(self):
-        pass
+        def __delete_page_from_trackers():
+            for pdicts in (self.bases, self.tails):
+                for pdict in pdicts:
+                    if page_id in pdict:
+                        del pdict[page_id]
+                        return
 
-    def _write_val(self, col: int, val: int, page_lists: list[list]) -> RecordIndex:
+        # Search for most recently used UNPINNED page to evict from cache
+        for page_id in reversed(self.page_table):
+            page = self.page_table[page_id]
+
+            if page.pin_count <= 0:
+                del self.page_table[page_id]
+
+                __delete_page_from_trackers()
+
+                # Cleanup
+                self.page_count -= 1
+                if page.is_dirty:
+                    self._flush_page_to_disk(page)
+
+                return
+            
+        raise RuntimeWarning("Tried to evict a page, but no unpinned pages available!")
+
+
+    def _write_val(self, col: int, val: int, pages_dicts: list[OrderedDict]) -> RecordIndex:
         """
         Writes the given value to the last page in the given column, marking it as dirty.
 
         If full, allocates a new page and writes there.
         """
-        plist = page_lists[col]
-        if plist:
-            page = self.page_table[plist[-1]]
+        pdict = pages_dicts[col]
+
+        if pdict:
+            pid = next(reversed(pdict))
+            page = self.page_table[pid]
         else:
             page = None
 
         if page is None or not page.has_capacity():
-            # Create new page and update buffer pool
             page = self._create_new_page()
-            plist.append(page.id)
+
+            pdict[page.id] = None  # Value doesn't matter, used as ordered set
             self.page_table[page.id] = page
 
-            # Update for MRU eviction
+            # Update page table (and address MRU eviction)
+            self.page_table[page.id] = page
             self.page_table.move_to_end(page.id, last=True)
             if self.max_buffer_size and self.page_count > self.max_buffer_size:
                 self._evict_page()
