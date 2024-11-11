@@ -72,18 +72,21 @@ class RID:
     @property
     def rid(self):
         return self._rid
+    
+    def __int__(self):
+        return self._rid
 
     @property
     def uid(self):
-        return (self.rid & _FIELD_MASKS[_RIDField.ID_NUM]) >> _RID_SHIFTS[_RIDField.ID_NUM]
+        return self._get_field(_RIDField.ID_NUM)
     
     @property
     def is_base(self):
-        return (self.rid & _FIELD_MASKS[_RIDField.IS_BASE]) >> _RID_SHIFTS[_RIDField.IS_BASE]
+        return self._get_field(_RIDField.IS_BASE)
 
     @property
     def tombstone(self):
-        return (self.rid & _FIELD_MASKS[_RIDField.TOMBSTONE]) >> _RID_SHIFTS[_RIDField.TOMBSTONE]
+        return self._get_field(_RIDField.TOMBSTONE)
 
     def to_bytes(self, length=8, byteorder="big", signed=True):
         # TODO: Ensure signed=False works without getting in way of negative data ints
@@ -96,3 +99,6 @@ class RID:
     def __eq__(self, rhs) -> bool:
         # Used by dict
         return self.rid == rhs.rid
+
+    def _get_field(self, idx):
+        return (self.rid & _FIELD_MASKS[idx]) >> _RID_SHIFTS[idx]

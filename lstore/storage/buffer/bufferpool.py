@@ -42,23 +42,8 @@ class Bufferpool:
             dict() for _ in range(self.tcols)
         ]
 
-        self.base = [OrderedDict() for _ in range(self.tcols)]
-
-        self.tail = [OrderedDict() for _ in range(self.tcols)]
-
-    def pin_page(self, page_id):
-        """Increment the pin count for a specific page to prevent eviction."""
-        for column in self.pages:
-            if page_id in column:
-                page = column[page_id]
-                page.pin_count += 1
-
-    def unpin_page(self, page_id):
-        """Decrement the pin count for a specific page, allowing for eviction."""
-        for column in self.pages:
-            if page_id in column:
-                page = column[page_id]
-                page.pin_count = max(0, page.pin_count - 1)
+        # self.base = [OrderedDict() for _ in range(self.tcols)]
+        # self.tail = [OrderedDict() for _ in range(self.tcols)]
 
     def write(self, rid: RID, columns: tuple[int]) -> list[RecordIndex]:
         """
@@ -190,6 +175,19 @@ class Bufferpool:
 
         return Record(self.table.key, columns, rid)
 
+    def pin_page(self, page_id):
+        """Increment the pin count for a specific page to prevent eviction."""
+        for column in self.pages:
+            if page_id in column:
+                page = column[page_id]
+                page.pin_count += 1
+
+    def unpin_page(self, page_id):
+        """Decrement the pin count for a specific page, allowing for eviction."""
+        for column in self.pages:
+            if page_id in column:
+                page = column[page_id]
+                page.pin_count = max(0, page.pin_count - 1)
 
     # Helpers ------------------------
 
@@ -204,11 +202,8 @@ class Bufferpool:
 
         if page is None or not page.has_capacity():
             # Create new page and update buffer pool
-            page = Page(self.curr_page_id)
+            page = self._create_new_page()
             self.pages[col][page.id] = page
-
-            self.curr_page_id += 1
-            self.page_count += 1
 
             # TODO: handle full buffer
             if self.max_buffer_size and self.page_count > self.max_buffer_size:
@@ -220,6 +215,14 @@ class Bufferpool:
         offset = page.write(val)
 
         return RecordIndex(page.id, offset)
+    
+    def _create_new_page(self):
+        page = Page(self.curr_page_id)
+
+        self.curr_page_id += 1
+        self.page_count += 1
+
+        return page
 
     def _overwrite_val(self, rid: RID, col: int, val: int):
         """

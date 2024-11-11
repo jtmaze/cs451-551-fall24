@@ -14,7 +14,6 @@ indices are for accessing data via this bufferpool.
 
 from typing import Literal
 
-from lstore.storage.buffer.write_queue import WriteQueue
 from lstore.storage.buffer.page_dir import PageDirectory
 from lstore.storage.buffer.bufferpool import Bufferpool
 
@@ -38,8 +37,6 @@ class Buffer:
 
         # In memory -------------------
 
-        self.write_queue = WriteQueue(self.table)
-
         # Maps RIDs to (logical page ID, offset) pairs per column
         self.page_dir: dict[RID, list[RecordIndex]] = dict()
 
@@ -59,12 +56,6 @@ class Buffer:
         :return: The created RID to be stored in the index
         """
         rid: RID = RID.from_params(is_base=1, tombstone=0)
-
-        # need_flush = self.write_queue.write(rid, columns)
-
-        # if need_flush:
-        #     for v_rids, v_data, v_meta in self.write_queue.flush_generator():
-        #         self.bufferpool.batch_write(v_rids, v_data, v_meta)
 
         # Write and insert record indices per each column into page dir
         self.page_dir[rid] = self.bufferpool.write(rid, columns)
