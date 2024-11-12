@@ -8,7 +8,6 @@ class Page:
         self.data = bytearray(config.PAGE_SIZE)
         self.is_dirty = False       # Dirty flag
         self.pin_count = 0          # Pin count
-        # self.is_base = False        # Base flag
 
     def has_capacity(self):
         return len(self.data) - self.num_records * config.RECORD_SIZE >= config.RECORD_SIZE

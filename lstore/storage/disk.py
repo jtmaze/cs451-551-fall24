@@ -12,7 +12,8 @@ class Disk:
         """
         Generates a file path for a given RID.
         """
-        return os.path.join(self.STORAGE_DIR, f"page_{rid.page_id}.bin")
+        page_type = "base" if rid.is_base else "tail"
+        return os.path.join(self.STORAGE_DIR, f"{page_type}_page_{rid.pages_id}.bin")
 
     def get_page(self, rid):
         """

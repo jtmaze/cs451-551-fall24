@@ -61,14 +61,14 @@ class Bufferpool:
         record_indices = [None for _ in range(self.tcols)]
 
         # Write metadata, saving record indices per column
-        record_indices[MetaCol.INDIR] = self._write_val(MetaCol.INDIR, rid, self.base_trackers)
-        record_indices[MetaCol.RID] = self._write_val(MetaCol.RID, rid, self.base_trackers)
-        record_indices[MetaCol.SCHEMA] = self._write_val(MetaCol.SCHEMA, 0, self.base_trackers)
+        record_indices[MetaCol.INDIR] = self._write_val(MetaCol.INDIR, rid, rid)
+        record_indices[MetaCol.RID] = self._write_val(MetaCol.RID, rid, rid)
+        record_indices[MetaCol.SCHEMA] = self._write_val(MetaCol.SCHEMA, 0, rid)
 
         # Write data, saving record indices per remaining columns
         for i in range(len(MetaCol), self.tcols):
             record_indices[i] = self._write_val(
-                i, columns[i - len(MetaCol)], self.base_trackers)
+                i, columns[i - len(MetaCol)], rid)
 
         # Return indices to be stored as values in page directory
         return record_indices
@@ -97,12 +97,12 @@ class Bufferpool:
         # Set new tail indir to prev tail rid and base indir to new rid
         prev_rid = RID(self._read_meta(base_indices, MetaCol.INDIR))
         tail_indices[MetaCol.INDIR] = self._write_val(
-            MetaCol.INDIR, prev_rid, self.tail_trackers)
+            MetaCol.INDIR, prev_rid, tail_rid)
         self._overwrite_val(rid, MetaCol.INDIR, tail_rid)
 
         # RID ----------- -------------
 
-        tail_indices[MetaCol.RID] = self._write_val(MetaCol.RID, tail_rid, self.tail_trackers)
+        tail_indices[MetaCol.RID] = self._write_val(MetaCol.RID, tail_rid, tail_rid)
 
         # Schema encoding & data ------
 
@@ -122,11 +122,11 @@ class Bufferpool:
                 # Get previous value if cumulative
                 val = self._read_val(real_col, prev_indices[real_col])
 
-            tail_indices[real_col] = self._write_val(real_col, val, self.tail_trackers)
+            tail_indices[real_col] = self._write_val(real_col, val, tail_rid)
 
         # Write both base and new tail record schema encoding
         tail_indices[MetaCol.SCHEMA] = self._write_val(
-            MetaCol.SCHEMA, schema_encoding, self.tail_trackers)
+            MetaCol.SCHEMA, schema_encoding, tail_rid)
         self._overwrite_val(rid, MetaCol.SCHEMA, schema_encoding)
 
         return tail_indices
@@ -221,12 +221,15 @@ class Bufferpool:
         raise RuntimeWarning("Tried to evict a page, but no unpinned pages available!")
 
 
-    def _write_val(self, col: int, val: int, page_trackers: list[OrderedDict]) -> RecordIndex:
+    def _write_val(self, col: int, val: int, rid: RID) -> RecordIndex:
         """
         Writes the given value to the last page in the given column, marking it as dirty.
 
         If full, allocates a new page and writes there.
         """
+        is_base = rid.is_base
+
+        page_trackers = self.base_trackers if is_base else self.tail_trackers
         ptrack = page_trackers[col]
 
         if ptrack:
@@ -238,14 +241,15 @@ class Bufferpool:
         if page is None or not page.has_capacity():
             page = self._create_new_page()
 
+            if self.max_buffer_size and self.page_count > self.max_buffer_size:
+                self._evict_page()
+
             ptrack[page.id] = None  # Value doesn't matter, used as ordered set
             self.reverse_tracker[page.id] = (page_trackers, col)
 
             # Update page table (and address MRU eviction)
             self.page_table[page.id] = page
             self.page_table.move_to_end(page.id, last=True)
-            if self.max_buffer_size and self.page_count > self.max_buffer_size:
-                self._evict_page()
         else:
             self.page_table.move_to_end(page.id, last=True)
 

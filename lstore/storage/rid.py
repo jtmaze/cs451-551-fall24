@@ -11,15 +11,22 @@ from enum import IntEnum
 
 # Setup -----------------------------------------
 
+
 class _RIDField(IntEnum):
     """RID attribute index"""
     ID_NUM = 0
-    IS_BASE = 1
-    TOMBSTONE = 2
+    PAGES_ID = 1
+    PAGES_OFFSET = 2
+    IS_BASE = 3
+    TOMBSTONE = 4
 
+_TOTAL_RID_BITS = 128
+_TOTAL_RID_BYTES = _TOTAL_RID_BITS // 8
 
 _RID_BITS = (
     48,  # ID
+    20,  # pages_id
+    12,  # offset
     1,   # is_base
     1,   # tombstone
 )
@@ -43,13 +50,19 @@ _FIELD_MASKS = tuple(
 # Class -----------------------------------------
 
 class RID:
-    ctr = 2 ** _RID_BITS[_RIDField.ID_NUM]
+    ctr = 2 ** _RID_BITS[_RIDField.ID_NUM] - 1
 
     def __init__(self, rid_int: int):
         self._rid = rid_int
 
     @classmethod
-    def from_params(cls, is_base: Literal[0, 1], tombstone: Literal[0, 1]):
+    def from_params(
+        cls,
+        is_base: Literal[0, 1],
+        tombstone: Literal[0, 1],
+        pages_id = 0,
+        pages_offset = 0,
+    ):
         """
         Constructor with parameters. ex rid = RID.from_params(...)
         """
@@ -58,12 +71,14 @@ class RID:
         RID.ctr -= 1
 
         # Ensure correct amount of bits
+        pages_id &= _RID_MASKS[_RIDField.PAGES_ID]
+        pages_offset &= _RID_MASKS[_RIDField.PAGES_OFFSET]
         is_base &= _RID_MASKS[_RIDField.IS_BASE]
         tombstone &= _RID_MASKS[_RIDField.TOMBSTONE]
 
         # Shift and combine fields into integer
         rid_int = 0
-        for i, field in enumerate((id, is_base, tombstone)):
+        for i, field in enumerate((id, pages_id, pages_offset, is_base, tombstone)):
             rid_int |= (field << _RID_SHIFTS[i])
 
         # Create object and return
@@ -81,6 +96,14 @@ class RID:
         return self._get_field(_RIDField.ID_NUM)
     
     @property
+    def pages_id(self):
+        return self._get_field(_RIDField.PAGES_ID)
+    
+    @property
+    def pages_offset(self):
+        return self._get_field(_RIDField.PAGES_OFFSET)
+    
+    @property
     def is_base(self):
         return self._get_field(_RIDField.IS_BASE)
 
@@ -88,7 +111,7 @@ class RID:
     def tombstone(self):
         return self._get_field(_RIDField.TOMBSTONE)
 
-    def to_bytes(self, length=8, byteorder="big", signed=True):
+    def to_bytes(self, length=_TOTAL_RID_BYTES, byteorder="big", signed=True):
         # TODO: Ensure signed=False works without getting in way of negative data ints
         # TODO: Test larger lengths when fields are added
         return self.rid.to_bytes(length, byteorder, signed=signed)
