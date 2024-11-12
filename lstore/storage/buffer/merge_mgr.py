@@ -6,10 +6,14 @@
 #4. Update the page directory
 #5. De-allocate the outdate base pages
 
+# Stupid/simple questions:
+- By "committed tail records" do we just mean tail records on disK???
+
 # Design questions:
-- Granularity of the merge operation: base page level, or the page range level??
+- Granularity of the merge operation: 
+    - Easiest approach seems coarser-grained and less frequent merges?
 - How can we load the tail-records in descending order of update time? This makes the merge algorithm more efficient.
-- 
+    - *** If RID monotonically decreases for a given base record with update time, could be beneficial. 
 """
 
 from collections import namedtuple
@@ -29,6 +33,17 @@ class MergeManager:
 
         pass
 
+    def to_merge_que(self, tail_page_ids, start=0, n_pages=100):
+        """
+        Inputs: Full list of tail page_ids
+        Returns: List of n tail page_ids to for the merge operation.
+        """
+
+        for i in range(start, len(tail_page_ids), n_pages):
+            subset = tail_page_ids[i:i + n_pages]
+
+            return subset
+
     def load_committed_pages(self, page_ids, is_base=False):
         """
         Returns all the records and designates them as base or committed tail records.  
@@ -43,15 +58,17 @@ class MergeManager:
 
         return records
     
-    def merge_pages(self):
+    def merge_pages(self, start=0):
         """
         Conceuptually, a left-outer join
         Inputs: a list of base page_ids and a list of tail page_ids
         Returns: a dictionary with updated read only base pages.
         """
         # How to get the base and tail page_ids???
+        tail_page_ids_subset = self.to_merge_que(self.tail_page_ids, start=start)
+        committed_tail_records = self.load_committed_pages(self.tail_page_ids_subset, is_base=False)
         original_base_records = self.load_committed_pages(self.base_page_ids, is_base=True) 
-        committed_tail_records = self.load_committed_pages(self.tail_page_ids, is_base=False)
+
         new_base_records = original_base_records.copy() 
 
         latest_tail_records = {}
@@ -72,36 +89,20 @@ class MergeManager:
             else:
                 pass
 
-        # # Prevents double checking the same base record
-        # checked_base_records = set()
-        
-        # # Get the base RID assocaited with a given tail record.
-        # for r in committed_tail_records:
-        #     base_rid_column = 'X' #??? Is the base RID stored in the tail record column?
-        #     base_rid = r[base_rid_column] 
-        #     #OR make method like if base RID not stored in tail records:
-        #     # r.get_base_rid()??? Method would follow indirection column to find the base RID.
-
-        #     if base_rid in checked_base_records:
-        #         continue
-        #     else:
-        #         tail_rid = r['rid'] # Tail record's RID column number?
-        #         new_base_records.update(r) 
-
-        #         checked_base_records.update(base_rid)
                 
         return new_base_records
     
     def apply_tail_to_base(self, base_record, tail_record):
         """
-        Inputs: a base record and a 
-        Returns: a new base record with the tail record applied."""
+        Inputs: a base record and the latest corresponding tail record
+        Returns: a new base record with the tail record applied.
+        """
 
         new_base_record = base_record.copy() 
         schema_encoding = tail_record['schema_encoding']
 
         for i, column_changed in enumerate(schema_encoding):
-            if column_changed:
+            if column_changed == 1:
                 new_base_record['columns'][i] = tail_record['columns'][i]
 
         new_base_record['last_update_time'] = tail_record['last_update_time']
@@ -123,7 +124,7 @@ class MergeManager:
     def deallocate_base_pages(self):
         """
         For now, this method will just swap the old base pages with the new base pages.
-        For M3, things becoeme more complicated, becuase there can be an active query on out-date base pages.
+        Deletes the old base pages
         """
         pass
 
