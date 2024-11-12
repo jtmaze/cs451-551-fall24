@@ -190,6 +190,8 @@ class Query:
     def _sum_core(self, start_range, end_range, aggregate_column_index, relative_version=0):
         """
         Core summation functionality for use by sum and sum_version.
+
+        TODO: REMOVE THAT WE GRAB WHOLE RECORDS WHEN CHECKING VALS
         """
         try:
             total_sum = 0
@@ -202,6 +204,24 @@ class Query:
         except Exception as e:
             self._print_error(e)
             return False
+        
+    def count(self, start_range, end_range, column_index, relative_version = 0):
+        """
+        Counts number of records with column value between start_range and end_range. 
+        set start range and end range equal to eachother if you just want num records with column value equal to that one number
+        """
+        proj_col_idx = [0] * self.table.num_columns
+        proj_col_idx[column_index] = 1
+        try:
+            total_count = 0
+            records = self.select_version_range(start_range, end_range, column_index, proj_col_idx, relative_version)
+            if records:
+                total_count = len(records)
+            return total_count
+        except Exception as e:
+            self._print_error(e)
+            return False
+
 
     @staticmethod
     def _print_error(err):

@@ -14,7 +14,7 @@ class DictIndex(IndexType):
         
         return [output]
 
-    def get_range(self, begin, end) -> list[RID]:
+    def get_range_key(self, begin, end) -> list[RID]:
         """
             Takes in a begin key and end key
             Returns list of RIDs of all keys inbetween
@@ -24,9 +24,23 @@ class DictIndex(IndexType):
             output.append(self.data.get(val, None))
         
         return output
+    
+    def get_range_val(self, begin, end) -> list[RID]:
+        """
+            Takes in begin val and end val
+            returns list of all RIDS associated with the value
+        """
+        results = []
+        for i in self.data:
+            if self.data[i] >= begin and self.data[i] <= end:
+                results.extend(i)
 
-    def insert(self, val, rid):
-        self.data[val] = rid
+        return results
+
+    def insert(self, key, val):
+        # Val is RID if primary key,
+        # Val is value if not primary key
+        self.data[key] = val
 
     def delete(self, val):
         del self.data[val]

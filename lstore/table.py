@@ -42,7 +42,8 @@ class Table:
         self.buffer = Buffer(self)
 
         # Index for faster querying on primary key and possibly other columns
-        self.index = Index(self, key, num_columns, index_config)
+        # Creates a index for every column
+        self.index = Index(self, 0, num_columns, index_config)
 
     def __merge(self):
         print("merge is happening")
@@ -63,7 +64,8 @@ class Table:
             raise  # Re-raise exception error
 
         # Update primary key's index
-        self.index.insert_val(self.key, columns[self.key], rid)
+        for i in range(0, self.num_columns):
+            self.index.insert_val(i, columns[i], rid, is_prim_key = (i == self.key))
 
         # TODO: Update other indices
         pass
@@ -110,7 +112,7 @@ class Table:
         proj_col_idx: list[Literal[0, 1]],
         rel_version: int = 0  # Default to newest tail (lastest version)
     ) -> list[Record]:
-        rid_list = self.index.locate_range(start_range, end_range, search_key_idx)
+        rid_list = self.index.locate_range(start_range, end_range, search_key_idx, is_prim_key = (search_key_idx == self.key))
         records = []
         for rid in rid_list:
             try:

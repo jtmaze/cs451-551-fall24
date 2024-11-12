@@ -48,6 +48,17 @@ for i in range(0, 10000, 100):
 agg_time_1 = process_time()
 print("Aggregate 10k of 100 record batch took: \t\t\t", agg_time_1 - agg_time_0)
 
+"""
+# Measuring range query on values
+aggregate_on_value_0 = process_time()
+for i in range(0, 10000):
+    begin_val = 30
+    end_val = 60
+    result = query.count(begin_val, end_val, randrange(1, 5))
+aggregate_on_value_1 = process_time()
+print("Aggregate on Value 10k records with value between 30 and 60 took: \t\t\t", aggregate_on_value_1 - aggregate_on_value_0)
+"""
+
 # Measuring Delete Performance
 delete_time_0 = process_time()
 for i in range(0, 10000):
