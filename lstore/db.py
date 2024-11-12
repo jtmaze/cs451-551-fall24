@@ -1,4 +1,5 @@
 from lstore.table import Table
+import os
 
 from lstore.index_types.index_config import IndexConfig
 
@@ -6,14 +7,36 @@ class Database():
 
     def __init__(self):
         self.tables = dict()
-        pass
+        self.path = None
 
     # Not required for milestone1
     def open(self, path):
-        pass
+        """
+        Opens the database at the specified path, initializing tables and loading
+        metadata if applicable. Sets up directories and prepares storage.
+
+        :param path: The filesystem path where the database is stored.
+        """
+        self.path = path
+
+        # Create directory for database files if it doesn't exist
+        if not os.path.exists(self.path):
+            os.makedirs(self.path)
+
+        # Optional: Load metadata and initialize tables from storage files
+        # self._load_metadata()
 
     def close(self):
-        pass
+        """
+        Closes the database by ensuring all in-memory data is safely flushed to disk.
+        """
+        for table in self.tables.values():
+            # Ensures any dirty pages are written to disk
+            table.flush_pages()
+        # Clear tables in memory
+        self.tables.clear()
+        # Clear the database path reference
+        self.path = None
 
     """
     # Creates a new table

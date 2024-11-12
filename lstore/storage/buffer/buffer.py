@@ -14,7 +14,8 @@ indices are for accessing data via this bufferpool.
 
 from typing import Literal
 
-from lstore.storage.bufferpool import Bufferpool
+from lstore.storage.buffer.bufferpool import Bufferpool
+
 from lstore.storage.record_index import RecordIndex
 from lstore.storage.disk import Disk
 from lstore.storage.rid import RID
@@ -24,9 +25,9 @@ from lstore.storage.record import Record
 
 class Buffer:
     """
-    Buffer with page directory and bufferpool.
+    Buffer for in memory management.
 
-    :param table: Reference to parent table for things like num_columns
+    :param table: Reference to parent table
     """
 
     def __init__(self, table) -> None:

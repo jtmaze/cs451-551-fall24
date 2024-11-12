@@ -15,7 +15,7 @@ class Query:
     """
 
     def __init__(self, table):
-        self.table = table
+        self.table: Table = table
 
     def delete(self, primary_key) -> bool:
         """

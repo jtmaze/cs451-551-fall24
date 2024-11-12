@@ -6,6 +6,9 @@ class Page:
         self.id = id
         self.num_records = 0
         self.data = bytearray(config.PAGE_SIZE)
+        self.is_dirty = False       # Dirty flag
+        self.pin_count = 0          # Pin count
+        # self.is_base = False        # Base flag
 
     def has_capacity(self):
         return len(self.data) - self.num_records * config.RECORD_SIZE >= config.RECORD_SIZE
@@ -45,5 +48,13 @@ class Page:
     def invalidate(self, rid):
         # TODO: Page 'deletion'
         raise NotImplementedError()
+    
+    def get_all_page_rids(self):
+        """
+        Returns a list of all RIDs in the page.
+        Method woud be useful in the merge_mgr.py, but maybe it should be in disk.py?
+        """
+        
+        pass
     
 
