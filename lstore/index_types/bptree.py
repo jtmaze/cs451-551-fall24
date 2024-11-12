@@ -153,21 +153,21 @@ class BPTree:
        #print(f'Key:{key_search} not found in leaf node')
         return False # If the key/value pair is not found
     
-    def get_range(self, key_low, key_high):
+    # can take primary key, can also take values
+    def get_range_val(self, val_low, val_high):
         """
-        Performs range query on tree returns list of values
+        Performs range query on tree returns list of RIDS
         """
         results = []
         # Find the leaf node with key_low
-        low_leaf = self.search_node(key_low)
-
+        low_leaf = self.search_node(val_low)
         while low_leaf:
             leaf_key_max = low_leaf.keys[-1]
             # Range query on a leaf
-            leaf_results, next_leaf_pointer = low_leaf.range_query_leaf(key_low, key_high)
+            leaf_results, next_leaf_pointer = low_leaf.range_query_leaf(val_low, val_high)
             results.extend(leaf_results)
 
-            if leaf_key_max >= key_high:
+            if leaf_key_max >= val_high:
                 break
         
             # Otherwise, move to the next leaf node
@@ -189,12 +189,21 @@ class BPTreeIndex(IndexType):
             # Maybe flatten?
             return values
         
-    def get_range(self, begin, end):
-        results = self.tree.get_range(begin, end)
+    def get_range_val(self, begin, end):
+        """
+        Gets list of RIDs with column value all between begin and end value
+        """
+        results = self.tree.get_range_val(begin, end)
         # Will need to flatten results, becuase could have buckets in BPTree
         # i.e. multiple values per key
         flattened_results = [val for sublist in results for val in sublist]
         return flattened_results
+    
+    def get_range_key(self, begin, end):
+        """
+        Gets list of RIDs with Prim ID all between begin and end value
+        """
+        return self.get_range_val(begin, end)
     
     def insert(self, val, rid):
         self.tree.insert(val, rid)

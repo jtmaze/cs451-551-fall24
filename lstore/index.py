@@ -11,6 +11,8 @@ from lstore.index_types.index_config import IndexConfig
 
 from lstore.index_types.bptree import BPTreeIndex
 
+from lstore.index_types.dict_index import DictIndex
+
 class Index:
 
     def __init__(self, table, key, num_columns, index_config):
@@ -21,7 +23,8 @@ class Index:
         self.indices = [None for _ in range(num_columns)]
 
         # Populate the index for the primary key
-        self.create_index(key)
+        for i in range(num_columns):
+            self.create_index(i)
 
     def locate(self, column, value):
         """
@@ -34,16 +37,20 @@ class Index:
         # If an index exists, use it to look up the RIDs
         return self.indices[column].get(value)
 
-    def locate_range(self, begin, end, column):
+    def locate_range(self, begin, end, column, is_prim_key = False):
         """
         # Returns the RIDs of all records with values in column "column" between "begin" and "end"
         """
         if self.indices[column] is None:
             return []
 
-        # Collect all RIDs for values within the specified range
         result = []
-        result.extend(self.indices[column].get_range(begin, end))
+        if is_prim_key: 
+            result.extend(self.indices[column].get_range_key(begin, end))
+        else: 
+            result.extend(self.indices[column].get_range_val(begin, end))
+        # Collect all RIDs for values within the specified range
+        
         return result
 
     def create_index(self, column_number):
@@ -68,9 +75,12 @@ class Index:
         if self.indices[column_number] is not None:
             self.indices[column_number] = None
 
-    def insert_val(self, col_number, val, rid):
-        if self.indices[col_number] is not None:
+    def insert_val(self, col_number, val, rid, is_prim_key = False):
+        if self.indices[col_number] is not None and (is_prim_key or self.index_config.index_type == BPTreeIndex):
             self.indices[col_number].insert(val, rid)
+        elif self.indices[col_number] is not None and self.index_config.index_type == DictIndex:
+            self.indices[col_number].insert(rid, val)
+
 
     # Helper ---------------------
 

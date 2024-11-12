@@ -10,7 +10,11 @@ class IndexType(ABC):
         pass
 
     @abstractmethod
-    def get_range(self, begin, end):
+    def get_range_key(self, begin, end):
+        pass
+
+    @abstractmethod
+    def get_range_val(self, begin, end):
         pass
 
     @abstractmethod

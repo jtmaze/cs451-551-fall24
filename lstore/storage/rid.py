@@ -98,7 +98,35 @@ class RID:
 
     def __eq__(self, rhs) -> bool:
         # Used by dict
-        return self.rid == rhs.rid
+        if type(rhs) == RID:
+            return self.rid == rhs.rid
+        else:
+            return self.rid == rhs
+    
+    def __gt__(self, rhs) -> bool:
+        if type(rhs) == RID:
+            return self.rid > rhs.rid
+        else:
+            return self.rid > rhs
+    
+    def __ls__(self, rhs) -> bool:
+        if type(rhs) == RID:
+            return self.rid < rhs.rid
+        else:
+            return self.rid < rhs
+    
+    def __ge__(self, rhs) -> bool:
+        if type(rhs) == RID:
+            return self.rid >= rhs.rid
+        else:
+            return self.rid >= rhs
+    
+    def __le__(self, rhs) -> bool:
+        if type(rhs) == RID:
+            return self.rid <= rhs.rid
+        else:
+            return self.rid <= rhs
 
     def _get_field(self, idx):
         return (self.rid & _FIELD_MASKS[idx]) >> _RID_SHIFTS[idx]
+
