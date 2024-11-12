@@ -14,7 +14,7 @@ from enum import IntEnum
 
 class _RIDField(IntEnum):
     """RID attribute index"""
-    ID_NUM = 0
+    UID = 0
     PAGES_ID = 1
     PAGES_OFFSET = 2
     IS_BASE = 3
@@ -24,7 +24,7 @@ _TOTAL_RID_BITS = 128
 _TOTAL_RID_BYTES = _TOTAL_RID_BITS // 8
 
 _RID_BITS = (
-    48,  # ID
+    48,  # UID
     20,  # pages_id
     12,  # offset
     1,   # is_base
@@ -50,7 +50,7 @@ _FIELD_MASKS = tuple(
 # Class -----------------------------------------
 
 class RID:
-    ctr = 2 ** _RID_BITS[_RIDField.ID_NUM] - 1
+    ctr = 2 ** _RID_BITS[_RIDField.UID] - 1
 
     def __init__(self, rid_int: int):
         self._rid = rid_int
@@ -60,14 +60,14 @@ class RID:
         cls,
         is_base: Literal[0, 1],
         tombstone: Literal[0, 1],
-        pages_id = 0,
-        pages_offset = 0,
+        pages_id: int,
+        pages_offset: int,
     ):
         """
         Constructor with parameters. ex rid = RID.from_params(...)
         """
         # Set ID and ensure correct amount of bits
-        id = RID.ctr & _RID_MASKS[_RIDField.ID_NUM]
+        uid = RID.ctr & _RID_MASKS[_RIDField.UID]
         RID.ctr -= 1
 
         # Ensure correct amount of bits
@@ -78,7 +78,7 @@ class RID:
 
         # Shift and combine fields into integer
         rid_int = 0
-        for i, field in enumerate((id, pages_id, pages_offset, is_base, tombstone)):
+        for i, field in enumerate((uid, pages_id, pages_offset, is_base, tombstone)):
             rid_int |= (field << _RID_SHIFTS[i])
 
         # Create object and return
@@ -86,14 +86,12 @@ class RID:
 
     @property
     def rid(self):
-        return self._rid
-    
-    def __int__(self):
+        # Gets actual integer, int(rid) is also supported
         return self._rid
 
     @property
     def uid(self):
-        return self._get_field(_RIDField.ID_NUM)
+        return self._get_field(_RIDField.UID)
     
     @property
     def pages_id(self):
@@ -115,40 +113,30 @@ class RID:
         # TODO: Ensure signed=False works without getting in way of negative data ints
         # TODO: Test larger lengths when fields are added
         return self.rid.to_bytes(length, byteorder, signed=signed)
+    
+    def __int__(self):
+        return self._rid
 
     def __hash__(self) -> int:
         return hash(self.rid)
 
     def __eq__(self, rhs) -> bool:
         # Used by dict
-        if type(rhs) == RID:
-            return self.rid == rhs.rid
-        else:
-            return self.rid == rhs
+        return self._rid == int(rhs)
     
     def __gt__(self, rhs) -> bool:
-        if type(rhs) == RID:
-            return self.rid > rhs.rid
-        else:
-            return self.rid > rhs
+        return self._rid > int(rhs)
     
-    def __ls__(self, rhs) -> bool:
-        if type(rhs) == RID:
-            return self.rid < rhs.rid
-        else:
-            return self.rid < rhs
+    def __lt__(self, rhs) -> bool:
+        return self._rid < int(rhs)
     
     def __ge__(self, rhs) -> bool:
-        if type(rhs) == RID:
-            return self.rid >= rhs.rid
-        else:
-            return self.rid >= rhs
+        return self._rid >= int(rhs)
     
     def __le__(self, rhs) -> bool:
-        if type(rhs) == RID:
-            return self.rid <= rhs.rid
-        else:
-            return self.rid <= rhs
+        return self._rid <= int(rhs)
+        
+    # Helpers -------------------
 
     def _get_field(self, idx):
         return (self.rid & _FIELD_MASKS[idx]) >> _RID_SHIFTS[idx]
