@@ -25,8 +25,8 @@ _TOTAL_RID_BYTES = _TOTAL_RID_BITS // 8
 
 _RID_BITS = (
     48,  # UID
-    20,  # pages_id
-    12,  # offset
+    36,  # pages_id
+    12,  # offset (2^12 == 4096)
     1,   # is_base
     1,   # tombstone
 )
@@ -58,10 +58,10 @@ class RID:
     @classmethod
     def from_params(
         cls,
-        is_base: Literal[0, 1],
-        tombstone: Literal[0, 1],
         pages_id: int,
         pages_offset: int,
+        is_base: Literal[0, 1],
+        tombstone: Literal[0, 1],
     ):
         """
         Constructor with parameters. ex rid = RID.from_params(...)
