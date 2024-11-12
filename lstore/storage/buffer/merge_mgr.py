@@ -7,13 +7,18 @@
 #5. De-allocate the outdate base pages
 
 # Stupid/simple questions:
-- By "committed tail records" do we just mean tail records on disK???
+- By "committed tail records" do we just mean tail records on disk???
 
 # Design questions:
 - Granularity of the merge operation: 
     - Easiest approach seems coarser-grained and less frequent merges?
+    - Is this a question of how many committed tail records we fetch in each batch??
+
+- When loading corresponding base pages, use the get_page method from disk.py??
+
 - How can we load the tail-records in descending order of update time? This makes the merge algorithm more efficient.
     - *** If RID monotonically decreases for a given base record with update time, could be beneficial. 
+
 """
 
 from collections import namedtuple
@@ -33,7 +38,7 @@ class MergeManager:
 
         pass
 
-    def to_merge_que(self, tail_page_ids, start=0, n_pages=100):
+    def tailpages_to_merge_que(self, tail_page_ids, start=0, n_pages=100):
         """
         Inputs: Full list of tail page_ids
         Returns: List of n tail page_ids to for the merge operation.
@@ -44,12 +49,12 @@ class MergeManager:
 
             return subset
 
-    def load_committed_pages(self, page_ids, is_base=False):
+    def load_pages(self, page_paths, is_base=False):
         """
         Returns all the records and designates them as base or committed tail records.  
         """
 
-        records = self._get_records(page_ids)
+        records = self._get_records(page_paths)
         for rid, record in records.items():
             if is_base:
                 record.set_base()
@@ -58,17 +63,20 @@ class MergeManager:
 
         return records
     
-    def merge_pages(self, start=0):
+    def merge_pages(self, tail_page_ids, base_page_ids, start=0):
         """
         Conceuptually, a left-outer join
         Inputs: a list of base page_ids and a list of tail page_ids
         Returns: a dictionary with updated read only base pages.
         """
         # How to get the base and tail page_ids???
-        tail_page_ids_subset = self.to_merge_que(self.tail_page_ids, start=start)
-        committed_tail_records = self.load_committed_pages(self.tail_page_ids_subset, is_base=False)
-        original_base_records = self.load_committed_pages(self.base_page_ids, is_base=True) 
+        tail_page_ids_subset = self.tailpages_to_merge_que(self.tail_page_ids, start=start)
+        tail_records = self.load_pages(self.tail_page_ids_subset, is_base=False)
 
+        # Need tail pages RIDs and fetch base records from disk based on that??
+        base_RIDs = None # TODO: Method to match tail RIDs to corresponding base RIDs
+        base_paths = base_RIDS._get_base_page_paths()
+        original_base_records = self.load_pages(self.base_page_ids, is_base=True) 
         new_base_records = original_base_records.copy() 
 
         latest_tail_records = {}
@@ -130,9 +138,9 @@ class MergeManager:
 
     # Helpers ----------------------------
 
-    def _get_records(self, pages):
+    def _get_records(self, page_path):
         """
-        Inputs: a list of page_ids
+        Inputs: a list of page paths
         Returns: All the records in the list of pages
         """
 
@@ -165,21 +173,33 @@ class MergeManager:
 
         return page_records
     
-    def _check_committed_status(self, record):
+    def get_base_page_paths(self, base_page_rids):
         """
-        Checks the committed status of a record.
-        If were're only getting RIDs with disk.py, this may not be necessary??
+        Inputs: a list of base page_ids
+        Returns: a list of base page paths
         """
-        if record.is_base():
-            # Aren't all base records committed?
-            return True 
-        elif record.is_tail():
-            if record.is_committed(): # Would this use transaction.py's commit method???
-                return True
-            else:
-                return False
-        else:
-            raise Exception("Need to designate record as base OR Tail.")
+        disk = Disk()
+        base_page_paths = []
+        for rid in base_page_rids:
+            base_page_paths.append(disk.get_page(rid))
+        
+        return base_page_paths
+    
+    # def _check_committed_status(self, record):
+    #     """
+    #     Checks the committed status of a record.
+    #     If were're only getting RIDs with disk.py, this may not be necessary??
+    #     """
+    #     if record.is_base():
+    #         # Aren't all base records committed?
+    #         return True 
+    #     elif record.is_tail():
+    #         if record.is_committed(): # Would this use transaction.py's commit method???
+    #             return True
+    #         else:
+    #             return False
+    #     else:
+    #         raise Exception("Need to designate record as base OR Tail.")
 
 
 
