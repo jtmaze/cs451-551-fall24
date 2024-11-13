@@ -44,6 +44,8 @@ class Bufferpool:
         # Maps page id to (tracker, col idx) for evictions
         self.reverse_tracker = dict()
 
+        self._new_vals_buffer = [None for _ in range(self.tcols)]
+
     def write(self, columns: tuple[int]) -> RID:
         """
         Writes a new record with the given data columns.
@@ -58,10 +60,9 @@ class Bufferpool:
         """
         pages: PageTableEntry = self._get_pages(True)
         pages_id, offset = pages.get_loc()
-
         rid: RID = RID.from_params(pages_id, offset, is_base=1, tombstone=0)
 
-        new_vals = [None for _ in range(self.tcols)]
+        new_vals = self._new_vals_buffer
 
         # Metadata
         new_vals[MetaCol.INDIR] = int(rid)
@@ -96,15 +97,17 @@ class Bufferpool:
         # Create new RID
         pages: PageTableEntry = self._get_pages(False)
         pages_id_t, offset_t = pages.get_loc()
-
         tail_rid: RID = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=tombstone)
 
-        new_vals = [None for _ in range(self.tcols)]
+        # Cache for performance
+        _read_val_cached = self._read_val
+
+        new_vals = self._new_vals_buffer
 
         # Indirection -----------------
 
         # Set new tail indir to prev tail rid and base indir to new rid
-        indir_rid = RID(self._read_val(MetaCol.INDIR, pages_id_b, offset_b))
+        indir_rid = RID(_read_val_cached(MetaCol.INDIR, pages_id_b, offset_b))
         new_vals[MetaCol.INDIR] = int(indir_rid)
         self._overwrite_val(MetaCol.INDIR, rid, tail_rid)
 
@@ -114,7 +117,7 @@ class Bufferpool:
 
         # Schema encoding & data ------
 
-        schema_encoding = self._read_val(MetaCol.SCHEMA, pages_id_b, offset_b)
+        schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_b, offset_b)
 
         # Get record indices for previous tail record if cumulative updates
         pages_id_i = indir_rid.pages_id
@@ -125,12 +128,12 @@ class Bufferpool:
         for data_col, val in enumerate(columns):
             real_col = metalen + data_col
 
-            if val is not None:
+            if val is None:
+                # Get previous value if cumulative
+                val = _read_val_cached(real_col, pages_id_i, offset_i)
+            else:
                 # Update schema by setting appropriate bit to 1
                 schema_encoding |= (1 << data_col)
-            else:
-                # Get previous value if cumulative
-                val = self._read_val(real_col, pages_id_i, offset_i)
 
             new_vals[real_col] = val
 
@@ -160,8 +163,11 @@ class Bufferpool:
 
         self._validate_not_deleted(rid, pages_id, offset)
 
+        # Cache for performance
+        _read_val_cached = self._read_val
+
         # If a column has tail records, get record indices for correct version
-        schema_encoding = self._read_val(MetaCol.SCHEMA, pages_id, offset)
+        schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id, offset)
         if schema_encoding:
             pages_id, offset = self._get_versioned_indices(
                 pages_id, offset, rel_version)
@@ -169,7 +175,7 @@ class Bufferpool:
         # Read projected data
         meta_len = len(MetaCol)
         columns = [
-            self._read_val(i, pages_id, offset) 
+            _read_val_cached(i, pages_id, offset) 
             for i in range(meta_len, self.tcols) 
             if proj_col_idx[i - meta_len]
         ]

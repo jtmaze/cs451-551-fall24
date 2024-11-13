@@ -10,12 +10,16 @@ class Page:
         self.pin_count = 0          # Pin count
 
     def has_capacity(self):
-        return len(self.data) - self.num_records * config.RECORD_SIZE >= config.RECORD_SIZE
+        record_size = config.RECORD_SIZE # Cache to skip namespace lookups
+
+        return len(self.data) - self.num_records * record_size >= record_size
 
     def write(self, value):
         if self.has_capacity():
-            start_index = self.num_records * config.RECORD_SIZE
-            self.data[start_index:start_index + config.RECORD_SIZE] = value.to_bytes(config.RECORD_SIZE, byteorder='big', signed=True)
+            record_size = config.RECORD_SIZE # Cache to skip namespace lookups
+
+            start_index = self.num_records * record_size
+            self.data[start_index:start_index + record_size] = value.to_bytes(record_size, byteorder='big', signed=True)
             self.num_records += 1
         else:
             # If the page is full, raise an exception
@@ -41,8 +45,10 @@ class Page:
         :param val: The new value to be written.
         :param offset: The byte offset where the value should be updated.
         """
+        record_size = config.RECORD_SIZE # Cache to skip namespace lookups
+
         # Convert the new value to bytes and overwrite the old data
-        self.data[offset:offset + config.RECORD_SIZE] = val.to_bytes(config.RECORD_SIZE, byteorder='big', signed=True)
+        self.data[offset:offset + record_size] = val.to_bytes(record_size, byteorder='big', signed=True)
         
     def invalidate(self, rid):
         # TODO: Page 'deletion'

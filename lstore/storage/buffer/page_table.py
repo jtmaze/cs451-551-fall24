@@ -11,7 +11,9 @@ class PageTableEntry:
         self.data = [Page(pages_id) for _ in range(tcols)]
 
         self.id = pages_id
+        
         self.bytes = 0
+        self.next_size = config.RECORD_SIZE
 
     def get_loc(self):
         return self.id, self.bytes
@@ -24,12 +26,9 @@ class PageTableEntry:
 
     def __len__(self):
         return len(self.data)
-
-    def __getattr__(self, attr):
-        return getattr(self.data, attr)
     
     def has_capacity(self):
-        return self.bytes + config.RECORD_SIZE <= config.PAGE_SIZE
+        return self.next_size <= config.PAGE_SIZE
     
     def write_vals(self, cols):
         for col, page in enumerate(self.data):
@@ -37,6 +36,7 @@ class PageTableEntry:
             page.is_dirty = True
 
         self.bytes += config.RECORD_SIZE
+        self.next_size += config.RECORD_SIZE
 
 
 class PageTable:
@@ -48,8 +48,8 @@ class PageTable:
         self.tcols = tcols
         self.size = 0
 
-    def __getattr__(self, attr):
-        return getattr(self.ptable, attr)
+    def move_to_end(self, pages_id, last):
+        self.ptable.move_to_end(pages_id, last)
 
     def create_pages(self):
         pages_id = PageTable.pages_id_gen.next_uid()

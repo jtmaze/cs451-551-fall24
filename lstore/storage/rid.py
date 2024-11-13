@@ -75,16 +75,19 @@ class RID:
         # Set ID and ensure correct amount of bits
         uid = RID.uid_gen.next_uid() & _RID_MASKS[_RIDField.UID]
 
-        # Ensure correct amount of bits
+        # Mask each input to ensure correct bit width
         pages_id &= _RID_MASKS[_RIDField.PAGES_ID]
         pages_offset &= _RID_MASKS[_RIDField.PAGES_OFFSET]
         is_base &= _RID_MASKS[_RIDField.IS_BASE]
         tombstone &= _RID_MASKS[_RIDField.TOMBSTONE]
 
-        # Shift and combine fields into integer
-        rid_int = 0
-        for i, field in enumerate((uid, pages_id, pages_offset, is_base, tombstone)):
-            rid_int |= (field << _RID_SHIFTS[i])
+        rid_int = (
+            (uid << _RID_SHIFTS[_RIDField.UID]) |
+            (pages_id << _RID_SHIFTS[_RIDField.PAGES_ID]) |
+            (pages_offset << _RID_SHIFTS[_RIDField.PAGES_OFFSET]) |
+            (is_base << _RID_SHIFTS[_RIDField.IS_BASE]) |
+            (tombstone << _RID_SHIFTS[_RIDField.TOMBSTONE])
+        )
 
         # Create object and return
         return cls(rid_int)
@@ -96,27 +99,25 @@ class RID:
 
     @property
     def uid(self):
-        return self._get_field(_RIDField.UID)
+        return (self.rid & _FIELD_MASKS[_RIDField.UID]) >> _RID_SHIFTS[_RIDField.UID]
     
     @property
     def pages_id(self):
-        return self._get_field(_RIDField.PAGES_ID)
+        return (self.rid & _FIELD_MASKS[_RIDField.PAGES_ID]) >> _RID_SHIFTS[_RIDField.PAGES_ID]
     
     @property
     def pages_offset(self):
-        return self._get_field(_RIDField.PAGES_OFFSET)
+        return (self.rid & _FIELD_MASKS[_RIDField.PAGES_OFFSET]) >> _RID_SHIFTS[_RIDField.PAGES_OFFSET]
     
     @property
     def is_base(self):
-        return self._get_field(_RIDField.IS_BASE)
+        return (self.rid & _FIELD_MASKS[_RIDField.IS_BASE]) >> _RID_SHIFTS[_RIDField.IS_BASE]
 
     @property
     def tombstone(self):
-        return self._get_field(_RIDField.TOMBSTONE)
+        return (self.rid & _FIELD_MASKS[_RIDField.TOMBSTONE]) >> _RID_SHIFTS[_RIDField.TOMBSTONE]
 
     def to_bytes(self, length=_TOTAL_RID_BYTES, byteorder="big", signed=True):
-        # TODO: Ensure signed=False works without getting in way of negative data ints
-        # TODO: Test larger lengths when fields are added
         return self.rid.to_bytes(length, byteorder, signed=signed)
     
     def get_loc(self):

@@ -13,6 +13,8 @@ class UIDGenerator:
     def __init__(self, name, file_dir, uid_bits, batch_size=100_000):
         self.name = name
 
+        os.makedirs(file_dir, exist_ok=True)
+
         self.file_path = os.path.join(file_dir, f"{name}_gen.json")
         self.max_val = (2 ** uid_bits) - 1
         self.batch_size = batch_size
