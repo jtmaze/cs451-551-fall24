@@ -290,10 +290,10 @@ class Bufferpool:
             # Get previous tail record (or base record). base.indir == base.rid!
             indir = RID(self._read_val(MetaCol.INDIR, pages_id, offset))
 
-            pages_id, offset = indir.get_loc()
-
-            if indir.is_base:
+            if indir <= 0 or indir.is_base:
                 break
+
+            pages_id, offset = indir.get_loc()
 
             rel_version += 1
 
@@ -302,7 +302,3 @@ class Bufferpool:
     def _validate_not_deleted(self, rid, pages_id, offset):
         if RID(self._read_val(MetaCol.INDIR, pages_id, offset)).tombstone:
             raise KeyError(f"Record {rid} was deleted")
-    
-    @staticmethod
-    def _gen_record_index():
-        raise NotImplementedError()
