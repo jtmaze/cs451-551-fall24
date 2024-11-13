@@ -9,6 +9,9 @@ from typing import Literal
 
 from enum import IntEnum
 
+from lstore import config
+from lstore.storage.uid_gen import UIDGenerator
+
 # Setup -----------------------------------------
 
 
@@ -50,7 +53,10 @@ _FIELD_MASKS = tuple(
 # Class -----------------------------------------
 
 class RID:
-    ctr = 2 ** _RID_BITS[_RIDField.UID] - 1
+    pages_id_bits = _RID_BITS[_RIDField.PAGES_ID]
+
+    # Generator
+    uid_gen = UIDGenerator("rid", config.UID_DIR, _RID_BITS[_RIDField.UID])
 
     def __init__(self, rid_int: int):
         self._rid = rid_int
@@ -67,8 +73,7 @@ class RID:
         Constructor with parameters. ex rid = RID.from_params(...)
         """
         # Set ID and ensure correct amount of bits
-        uid = RID.ctr & _RID_MASKS[_RIDField.UID]
-        RID.ctr -= 1
+        uid = RID.uid_gen.next_uid() & _RID_MASKS[_RIDField.UID]
 
         # Ensure correct amount of bits
         pages_id &= _RID_MASKS[_RIDField.PAGES_ID]
@@ -113,6 +118,9 @@ class RID:
         # TODO: Ensure signed=False works without getting in way of negative data ints
         # TODO: Test larger lengths when fields are added
         return self.rid.to_bytes(length, byteorder, signed=signed)
+    
+    def get_loc(self):
+        return self.pages_id, self.pages_offset
     
     def __int__(self):
         return self._rid

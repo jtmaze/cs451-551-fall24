@@ -12,7 +12,7 @@ from lstore.storage.record import Record
 from lstore.storage.meta_col import MetaCol
 from lstore.storage.rid import RID
 
-from lstore.storage.buffer.page_table import PageTable
+from lstore.storage.buffer.page_table import PageTable, PageTableEntry
 
 from lstore import config
 
@@ -34,7 +34,7 @@ class Bufferpool:
 
         self.max_buffer_size = config.MAX_BUFFER_PAGES
 
-        # Global page table for MRU eviction
+        # Global page table for LRU/MRU eviction
         self.page_table = PageTable(self.tcols)  # Maps page_id -> list of page objects per column
         
         # Pointers to pages in page_table (used as ordered sets)
@@ -56,23 +56,24 @@ class Bufferpool:
 
         :return: new RID
         """
-        # Create new RID
-        pages_id, offset = self._gen_record_index()
+        pages: PageTableEntry = self._get_pages(True)
+        pages_id, offset = pages.get_loc()
+
         rid: RID = RID.from_params(pages_id, offset, is_base=1, tombstone=0)
 
         new_vals = [None for _ in range(self.tcols)]
 
         # Metadata
-        new_vals[MetaCol.INDIR] = rid
-        new_vals[MetaCol.RID] = rid
+        new_vals[MetaCol.INDIR] = int(rid)
+        new_vals[MetaCol.RID] = int(rid)
         new_vals[MetaCol.SCHEMA] = 0
 
         # Data
         new_vals[len(MetaCol):self.tcols] = columns
 
-        self._write_vals(new_vals, rid)
+        pages.write_vals(new_vals)
 
-        # Return rid for index
+        # Return new base rid for index
         return rid
 
     def update(self, rid: RID, tombstone: Literal[0, 1], columns: tuple[int | None]):
@@ -88,13 +89,14 @@ class Bufferpool:
         :param tombstone: Value of tombstone flag (0 if updating, 1 if deleting)
         :param columns: New data values. Vals are none if no update for that col
         """
-        pages_id_b = rid.pages_id
-        offset_b = rid.pages_offset
+        pages_id_b, offset_b = rid.get_loc()
 
         self._validate_not_deleted(rid, pages_id_b, offset_b)
 
         # Create new RID
-        pages_id_t, offset_t = self._gen_record_index()
+        pages: PageTableEntry = self._get_pages(False)
+        pages_id_t, offset_t = pages.get_loc()
+
         tail_rid: RID = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=tombstone)
 
         new_vals = [None for _ in range(self.tcols)]
@@ -103,12 +105,12 @@ class Bufferpool:
 
         # Set new tail indir to prev tail rid and base indir to new rid
         indir_rid = RID(self._read_val(MetaCol.INDIR, pages_id_b, offset_b))
-        new_vals[MetaCol.INDIR] = indir_rid
-        self._overwrite_val(rid, MetaCol.INDIR, tail_rid)
+        new_vals[MetaCol.INDIR] = int(indir_rid)
+        self._overwrite_val(MetaCol.INDIR, rid, tail_rid)
 
         # RID ----------- -------------
 
-        new_vals[MetaCol.RID] = tail_rid
+        new_vals[MetaCol.RID] = int(tail_rid)
 
         # Schema encoding & data ------
 
@@ -116,15 +118,16 @@ class Bufferpool:
 
         # Get record indices for previous tail record if cumulative updates
         pages_id_i = indir_rid.pages_id
-        offset_i = indir_rid.offset
+        offset_i = indir_rid.pages_offset
 
         # Go through columns while updating schema encoding and data
+        metalen = len(MetaCol)
         for data_col, val in enumerate(columns):
-            real_col = len(MetaCol) + data_col
+            real_col = metalen + data_col
 
             if val is not None:
                 # Update schema by setting appropriate bit to 1
-                schema_encoding = schema_encoding | (1 << data_col)
+                schema_encoding |= (1 << data_col)
             else:
                 # Get previous value if cumulative
                 val = self._read_val(real_col, pages_id_i, offset_i)
@@ -133,9 +136,9 @@ class Bufferpool:
 
         # Write both base and new tail record schema encoding
         new_vals[MetaCol.SCHEMA] = schema_encoding
-        self._overwrite_val(rid, MetaCol.SCHEMA, schema_encoding)
+        self._overwrite_val(MetaCol.SCHEMA, rid, schema_encoding)
 
-        self._write_vals(new_vals, tail_rid)
+        pages.write_vals(new_vals)
 
     def read(
         self,
@@ -153,8 +156,7 @@ class Bufferpool:
 
         :return: Record with retrieved data in record.columns and base rid
         """
-        pages_id = rid.pages_id
-        offset = rid.offset
+        pages_id, offset = rid.get_loc()
 
         self._validate_not_deleted(rid, pages_id, offset)
 
@@ -164,13 +166,11 @@ class Bufferpool:
             pages_id, offset = self._get_versioned_indices(
                 pages_id, offset, rel_version)
 
-        # Cache attributes and list comp for speed
+        # Read projected data
         meta_len = len(MetaCol)
-        tcols = self.tcols
-        read_val = self._read_val
         columns = [
-            read_val(i, pages_id, offset) 
-            for i in range(meta_len, tcols) 
+            self._read_val(i, pages_id, offset) 
+            for i in range(meta_len, self.tcols) 
             if proj_col_idx[i - meta_len]
         ]
 
@@ -190,11 +190,6 @@ class Bufferpool:
 
     # Helpers ------------------------
 
-    def _create_new_pages(self, pages_id, col):
-        self.page_table.create_pages(pages_id)
-
-        return self.page_table[pages_id, col]
-    
     def _flush_page_to_disk(self, page):
         pass
 
@@ -221,47 +216,36 @@ class Bufferpool:
             
         raise RuntimeWarning("Tried to evict a page, but no unpinned pages available!")
 
-
-    def _write_vals(self, vals: int, rid: RID):
-        """
-        Writes the given value to the last page in the given column, marking it as dirty.
-
-        If full, allocates a new page and writes there.
-        """
-        is_base = rid.is_base
-
+    def _get_pages(self, is_base):
         page_tracker = self.base_trackers if is_base else self.tail_trackers
-        pages_id = next(reversed(page_tracker))
 
-        for col in range(self.tcols):
-            # Get page via page tracker
-            if page_tracker:
-                page = self.page_table.get(pages_id, col)
-            else:
-                page = None
+        if page_tracker:
+            pages_id = next(reversed(page_tracker))
+            pages = self.page_table.get_pages(pages_id)
+        else:
+            pages = None
 
-            # Create page if necessary
-            if page is None or not page.has_capacity():
-                page = self._create_new_pages(col)
+        # Create new pages if necessary
+        if pages is None or not pages.has_capacity():
+            pages, pages_id = self.page_table.create_pages()
 
-                if self.max_buffer_size and self.page_table.size > self.max_buffer_size:
-                    self._evict_page()
+            if self.max_buffer_size and self.page_table.size > self.max_buffer_size:
+                self._evict_page()
 
-                page_tracker[page.id] = None  # Value doesn't matter, used as ordered set
-                self.reverse_tracker[page.id] = (page_tracker, col)
+            page_tracker[pages_id] = None  # Value doesn't matter, used as ordered set
 
-            # Move to end for cache eviction
-            self.page_table.move_to_end(page.id, last=True)
+            # self.reverse_tracker[page.id] = (page_tracker, col)
 
-            page.is_dirty = True
-            offset = page.write(vals[col])
+        # Move to end for cache eviction
+        self.page_table.move_to_end(pages_id, last=True)
 
-    def _overwrite_val(self, rid: RID, col: int, val: int):
+        return pages
+
+    def _overwrite_val(self, col:int, rid: RID, val: int):
         """
         Overwrites a value in a page, marking it as dirty.
         """
-        pages_id = rid.pages_id
-        offset = rid.pages_offset
+        pages_id, offset = rid.get_loc()
 
         page = self.page_table.get_page(pages_id, col)
 
@@ -281,9 +265,6 @@ class Bufferpool:
 
         return page.read(offset)
 
-    def _get_base_indices(self, rid: RID):
-        return self.table.buffer.page_dir[rid]
-
     def _get_versioned_indices(self, pages_id, offset, rel_version):
         """
         Given base record indices, gets record indices for a given relative
@@ -292,16 +273,16 @@ class Bufferpool:
         # Will do it at least once since version 0 is newest tail record
         while rel_version <= 0:
             # Get previous tail record (or base record). base.indir == base.rid!
-            rid = RID(self._read_val(MetaCol.INDIR, pages_id, offset))
+            indir = RID(self._read_val(MetaCol.INDIR, pages_id, offset))
 
-            record_indices = self.table.buffer.page_dir[rid]
+            pages_id, offset = indir.get_loc()
 
-            if rid.is_base:
+            if indir.is_base:
                 break
 
             rel_version += 1
 
-        return record_indices
+        return pages_id, offset
 
     def _validate_not_deleted(self, rid, pages_id, offset):
         if RID(self._read_val(MetaCol.INDIR, pages_id, offset)).tombstone:
