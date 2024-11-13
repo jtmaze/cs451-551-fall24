@@ -9,12 +9,15 @@ from typing import Literal
 
 from enum import IntEnum
 
+from lstore import config
+from lstore.storage.uid_gen import UIDGenerator
+
 # Setup -----------------------------------------
 
 
 class _RIDField(IntEnum):
     """RID attribute index"""
-    ID_NUM = 0
+    UID = 0
     PAGES_ID = 1
     PAGES_OFFSET = 2
     IS_BASE = 3
@@ -24,9 +27,9 @@ _TOTAL_RID_BITS = 128
 _TOTAL_RID_BYTES = _TOTAL_RID_BITS // 8
 
 _RID_BITS = (
-    48,  # ID
-    20,  # pages_id
-    12,  # offset
+    48,  # UID
+    36,  # pages_id
+    12,  # offset (2^12 == 4096)
     1,   # is_base
     1,   # tombstone
 )
@@ -50,7 +53,10 @@ _FIELD_MASKS = tuple(
 # Class -----------------------------------------
 
 class RID:
-    ctr = 2 ** _RID_BITS[_RIDField.ID_NUM] - 1
+    pages_id_bits = _RID_BITS[_RIDField.PAGES_ID]
+
+    # Generator
+    uid_gen = UIDGenerator("rid", config.UID_DIR, _RID_BITS[_RIDField.UID])
 
     def __init__(self, rid_int: int):
         self._rid = rid_int
@@ -58,97 +64,88 @@ class RID:
     @classmethod
     def from_params(
         cls,
+        pages_id: int,
+        pages_offset: int,
         is_base: Literal[0, 1],
         tombstone: Literal[0, 1],
-        pages_id = 0,
-        pages_offset = 0,
     ):
         """
         Constructor with parameters. ex rid = RID.from_params(...)
         """
         # Set ID and ensure correct amount of bits
-        id = RID.ctr & _RID_MASKS[_RIDField.ID_NUM]
-        RID.ctr -= 1
+        uid = RID.uid_gen.next_uid() & _RID_MASKS[_RIDField.UID]
 
-        # Ensure correct amount of bits
+        # Mask each input to ensure correct bit width
         pages_id &= _RID_MASKS[_RIDField.PAGES_ID]
         pages_offset &= _RID_MASKS[_RIDField.PAGES_OFFSET]
         is_base &= _RID_MASKS[_RIDField.IS_BASE]
         tombstone &= _RID_MASKS[_RIDField.TOMBSTONE]
 
-        # Shift and combine fields into integer
-        rid_int = 0
-        for i, field in enumerate((id, pages_id, pages_offset, is_base, tombstone)):
-            rid_int |= (field << _RID_SHIFTS[i])
+        rid_int = (
+            (uid << _RID_SHIFTS[_RIDField.UID]) |
+            (pages_id << _RID_SHIFTS[_RIDField.PAGES_ID]) |
+            (pages_offset << _RID_SHIFTS[_RIDField.PAGES_OFFSET]) |
+            (is_base << _RID_SHIFTS[_RIDField.IS_BASE]) |
+            (tombstone << _RID_SHIFTS[_RIDField.TOMBSTONE])
+        )
 
         # Create object and return
         return cls(rid_int)
 
     @property
     def rid(self):
-        return self._rid
-    
-    def __int__(self):
+        # Gets actual integer, int(rid) is also supported
         return self._rid
 
     @property
     def uid(self):
-        return self._get_field(_RIDField.ID_NUM)
+        return (self.rid & _FIELD_MASKS[_RIDField.UID]) >> _RID_SHIFTS[_RIDField.UID]
     
     @property
     def pages_id(self):
-        return self._get_field(_RIDField.PAGES_ID)
+        return (self.rid & _FIELD_MASKS[_RIDField.PAGES_ID]) >> _RID_SHIFTS[_RIDField.PAGES_ID]
     
     @property
     def pages_offset(self):
-        return self._get_field(_RIDField.PAGES_OFFSET)
+        return (self.rid & _FIELD_MASKS[_RIDField.PAGES_OFFSET]) >> _RID_SHIFTS[_RIDField.PAGES_OFFSET]
     
     @property
     def is_base(self):
-        return self._get_field(_RIDField.IS_BASE)
+        return (self.rid & _FIELD_MASKS[_RIDField.IS_BASE]) >> _RID_SHIFTS[_RIDField.IS_BASE]
 
     @property
     def tombstone(self):
-        return self._get_field(_RIDField.TOMBSTONE)
+        return (self.rid & _FIELD_MASKS[_RIDField.TOMBSTONE]) >> _RID_SHIFTS[_RIDField.TOMBSTONE]
 
     def to_bytes(self, length=_TOTAL_RID_BYTES, byteorder="big", signed=True):
-        # TODO: Ensure signed=False works without getting in way of negative data ints
-        # TODO: Test larger lengths when fields are added
         return self.rid.to_bytes(length, byteorder, signed=signed)
+    
+    def get_loc(self):
+        return self.pages_id, self.pages_offset
+    
+    def __int__(self):
+        return self._rid
 
     def __hash__(self) -> int:
         return hash(self.rid)
 
     def __eq__(self, rhs) -> bool:
         # Used by dict
-        if type(rhs) == RID:
-            return self.rid == rhs.rid
-        else:
-            return self.rid == rhs
+        return self._rid == int(rhs)
     
     def __gt__(self, rhs) -> bool:
-        if type(rhs) == RID:
-            return self.rid > rhs.rid
-        else:
-            return self.rid > rhs
+        return self._rid > int(rhs)
     
-    def __ls__(self, rhs) -> bool:
-        if type(rhs) == RID:
-            return self.rid < rhs.rid
-        else:
-            return self.rid < rhs
+    def __lt__(self, rhs) -> bool:
+        return self._rid < int(rhs)
     
     def __ge__(self, rhs) -> bool:
-        if type(rhs) == RID:
-            return self.rid >= rhs.rid
-        else:
-            return self.rid >= rhs
+        return self._rid >= int(rhs)
     
     def __le__(self, rhs) -> bool:
-        if type(rhs) == RID:
-            return self.rid <= rhs.rid
-        else:
-            return self.rid <= rhs
+        return self._rid <= int(rhs)
+        
+    # Helpers -------------------
 
     def _get_field(self, idx):
         return (self.rid & _FIELD_MASKS[idx]) >> _RID_SHIFTS[idx]
