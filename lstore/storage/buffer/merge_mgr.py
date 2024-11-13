@@ -4,12 +4,17 @@
 #2. Load the corresponding outdated base pages
 #3. Consolidate the base and tail pages
 #4. Update the page directory
-#5. De-allocate the outdate base pages
+#5. De-allocate the outdated base pages
 
 # Stupid/simple questions:
 - By "committed tail records" do we just mean tail records on disk???
+- How do we set up a "background thread" to run the merge manager?
+    - Do we use conncurrent.futures?
+- Also, how can I make the page directory modifacation work in the foreground?
+- Unless I'm wrong, every RID has their own page on disk.py? 
 
-# Design questions:
+
+# Less stupid questions:
 - Granularity of the merge operation: 
     - Easiest approach seems coarser-grained and less frequent merges?
     - Is this a question of how many committed tail records we fetch in each batch??
@@ -22,6 +27,8 @@
 """
 
 from collections import namedtuple
+import concurrent.futures # For running background thread
+import time # For how often we shold merge. 
 
 from lstore.storage.buffer.bufferpool import Bufferpool
 from lstore.page import Page
@@ -40,43 +47,62 @@ class MergeManager:
 
     def tailpages_to_merge_que(self, tail_page_ids, start=0, n_pages=100):
         """
-        Inputs: Full list of tail page_ids
+        Inputs: Full list of tail page_ids ()
         Returns: List of n tail page_ids to for the merge operation.
         """
 
         for i in range(start, len(tail_page_ids), n_pages):
-            subset = tail_page_ids[i:i + n_pages]
+            # TODO: Method for generating tailpage paths
+            subset = self._get_paths_from_page_ids(tail_page_ids[i:i + n_pages])
 
             return subset
 
-    def load_pages(self, page_paths, is_base=False):
+    def load_pages(self, page_pointers, is_base=False):
         """
-        Returns all the records and designates them as base or committed tail records.  
+        Inputs: page_pointers - either RIDs (base pages) or page_ids (tail pages)
+                - If base_page=False a list of file paths to pages
+                - If base_page=True a list of base page RIDs
+        Returns: A dictionary with records for every page
         """
 
-        records = self._get_records(page_paths)
-        for rid, record in records.items():
-            if is_base:
-                record.set_base()
-            else:
-                record.set_tail()
+        if is_base:
+            # A list of base pages as bytes, should probably convert to tuples
+            base_pages = self._get_base_pages(page_pointers)
+            records = base_pages._get_page_records(base_pages)
+        else:
+            records = self._get_page_records(page_pointers)
 
         return records
     
-    def merge_pages(self, tail_page_ids, base_page_ids, start=0):
+    def find_latest_tail(records):
+        """
+        Inputs: A dictionary with all the tail records (spans multiple base RIDs)
+        Returns: A dictionary with the most up-to-date record for each base RID
+        """
+        
+        # 1. 
+        # From the tail records, we need a way to find the number of unique by base RIDs (think primary key..) for the records. 
+        # Seems similar to the _get_base_indicies() helper in bufferpool.py
+
+        # 2. 
+        # For each unique base RID, find the latest tail record
+        # The rel_version should = 0
+        pass
+
+    def merge_pages(self, tail_page_ids, base_page_RIDs, start=0):
         """
         Conceuptually, a left-outer join
         Inputs: a list of base page_ids and a list of tail page_ids
         Returns: a dictionary with updated read only base pages.
         """
         # How to get the base and tail page_ids???
-        tail_page_ids_subset = self.tailpages_to_merge_que(self.tail_page_ids, start=start)
+        tail_page_ids_subset = self.tailpages_to_merge_que(tail_page_ids, start=start)
         tail_records = self.load_pages(self.tail_page_ids_subset, is_base=False)
+        latest_tails = self.find_latest_tail(tail_records)
+
 
         # Need tail pages RIDs and fetch base records from disk based on that??
-        base_RIDs = None # TODO: Method to match tail RIDs to corresponding base RIDs
-        base_paths = base_RIDS._get_base_page_paths()
-        original_base_records = self.load_pages(self.base_page_ids, is_base=True) 
+        original_base_records = self.load_pages(self.base_page_RIDs, is_base=True) 
         new_base_records = original_base_records.copy() 
 
         latest_tail_records = {}
@@ -138,14 +164,14 @@ class MergeManager:
 
     # Helpers ----------------------------
 
-    def _get_records(self, page_path):
+    def _get_records(self, page_paths):
         """
         Inputs: a list of page paths
         Returns: All the records in the list of pages
         """
 
         records = {}
-        for page in pages:
+        for page in page_paths:
             records.update(self._get_page_records(page))
         
         return records
@@ -173,17 +199,17 @@ class MergeManager:
 
         return page_records
     
-    def get_base_page_paths(self, base_page_rids):
+    def _get_base_pages(self, base_page_rids):
         """
-        Inputs: a list of base page_ids
-        Returns: a list of base page paths
+        Inputs: a list of RIDs for base pages
+        Returns: a list of read pages as bytes
         """
         disk = Disk()
-        base_page_paths = []
+        base_pages = [] # List data structure might be a bad idea here
         for rid in base_page_rids:
-            base_page_paths.append(disk.get_page(rid))
-        
-        return base_page_paths
+            base_pages= [disk.get_page(rid) for rid in base_page_rids]
+
+        return base_pages
     
     # def _check_committed_status(self, record):
     #     """
