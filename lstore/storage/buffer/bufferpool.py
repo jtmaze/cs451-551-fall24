@@ -58,21 +58,30 @@ class Bufferpool:
 
         :return: new RID
         """
-        pages: PageTableEntry = self._get_pages(True)
-        pages_id, offset = pages.get_loc()
-        rid: RID = RID.from_params(pages_id, offset, is_base=1, tombstone=0)
+        # Create base rid
+        pages_b: PageTableEntry = self._get_pages(True)
+        pages_id_b, offset_b = pages_b.get_loc()
+        rid: RID = RID.from_params(pages_id_b, offset_b, is_base=1, tombstone=0)
 
+        # Create 'tail' rid (copy of base)
+        pages_t: PageTableEntry = self._get_pages(False)
+        pages_id_t, offset_t = pages_t.get_loc()
+        tail_rid: RID = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=0)
+
+        # Cache buffer
         new_vals = self._new_vals_buffer
 
-        # Metadata
-        new_vals[MetaCol.INDIR] = int(rid)
+        # Write base record
+        new_vals[MetaCol.INDIR] = int(tail_rid)
         new_vals[MetaCol.RID] = int(rid)
         new_vals[MetaCol.SCHEMA] = 0
+        new_vals[len(MetaCol):self.tcols] = columns # All data columns
+        pages_b.write_vals(new_vals)
 
-        # Data
-        new_vals[len(MetaCol):self.tcols] = columns
-
-        pages.write_vals(new_vals)
+        # Write first tail record (copy of base record)
+        new_vals[MetaCol.INDIR] = 0
+        new_vals[MetaCol.RID] = int(tail_rid)
+        pages_t.write_vals(new_vals)
 
         # Return new base rid for index
         return rid
