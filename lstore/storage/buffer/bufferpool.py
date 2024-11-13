@@ -6,7 +6,7 @@ offsets.
 
 from typing import Literal
 
-from collections import OrderedDict # MRU cache
+from collections import OrderedDict  # MRU cache
 
 from lstore.storage.record import Record
 from lstore.storage.meta_col import MetaCol
@@ -16,6 +16,7 @@ from lstore.storage.record_index import RecordIndex
 from lstore import config
 
 from lstore.page import Page
+from lstore.storage.disk import Disk
 
 
 class Bufferpool:
@@ -32,18 +33,21 @@ class Bufferpool:
         self.tcols = self.table.num_total_cols
 
         self.curr_page_id = 0  # Total pages created in memory
-        self.page_count = 0    # Current number of pages
+        self.page_count = 0  # Current number of pages
         self.max_buffer_size = config.MAX_BUFFER_PAGES
 
         # Global page table for MRU eviction
         self.page_table = OrderedDict()  # Maps page_id -> page object
-        
+
         # Pointers to pages in page_table (used as ordered sets)
         self.base_trackers = [OrderedDict() for _ in range(self.tcols)]
         self.tail_trackers = [OrderedDict() for _ in range(self.tcols)]
 
         # Maps page id to (tracker, col idx) for evictions
         self.reverse_tracker = dict()
+
+        #page id stuff
+        self.disk = Disk()
 
     def write(self, rid: RID, columns: tuple[int]) -> list[RecordIndex]:
         """
@@ -132,10 +136,10 @@ class Bufferpool:
         return tail_indices
 
     def read(
-        self,
-        rid: RID,
-        proj_col_idx: list[Literal[0, 1]],
-        rel_version: int
+            self,
+            rid: RID,
+            proj_col_idx: list[Literal[0, 1]],
+            rel_version: int
     ) -> Record:
         """
         Reads a record (projected columns only) given an RID and its associated
@@ -194,7 +198,7 @@ class Bufferpool:
         self.page_count += 1
 
         return page
-    
+
     def _flush_page_to_disk(self, page):
         pass
 
@@ -217,9 +221,8 @@ class Bufferpool:
                     self._flush_page_to_disk(page)
 
                 return
-            
-        raise RuntimeWarning("Tried to evict a page, but no unpinned pages available!")
 
+        raise RuntimeWarning("Tried to evict a page, but no unpinned pages available!")
 
     def _write_val(self, col: int, val: int, page_trackers: list[OrderedDict]) -> RecordIndex:
         """
@@ -253,7 +256,7 @@ class Bufferpool:
         offset = page.write(val)
 
         return RecordIndex(page.id, offset)
-    
+
     def _overwrite_val(self, rid: RID, col: int, val: int):
         """
         Overwrites a value in a page, marking it as dirty.
@@ -304,3 +307,16 @@ class Bufferpool:
     def _validate_not_deleted(self, rid, record_indices):
         if RID(self._read_meta(record_indices, MetaCol.INDIR)).tombstone:
             raise KeyError(f"Record {rid} was deleted")
+
+    def fetch_page(self, page_id):
+        """
+        Fetch a page by page_id. If it’s not in memory, load it from disk.
+        """
+        page = self.page_table.get(page_id)
+        if page is None:
+            page_data = self.disk.get_page(page_id)
+            page = Page(page_id=page_id)
+            page.data = bytearray(page_data)
+            self.page_table[page_id] = page
+            self.page_table.move_to_end(page_id, last=True)
+        return page
