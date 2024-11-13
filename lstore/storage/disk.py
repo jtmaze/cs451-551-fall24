@@ -8,11 +8,12 @@ class Disk:
         # Ensure the storage directory exists
         os.makedirs(self.STORAGE_DIR, exist_ok=True)
 
-    def _get_page_path(self, page_id):
+    def _get_page_path(self, rid):
         """
         Generates a file path for a given RID.
         """
-        return os.path.join(self.STORAGE_DIR, f"page_{page_id}.bin")
+        page_type = "base" if rid.is_base else "tail"
+        return os.path.join(self.STORAGE_DIR, f"{page_type}_page_{rid.pages_id}.bin")
 
     def get_page(self, page_id):
         """
