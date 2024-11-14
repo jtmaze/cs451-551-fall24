@@ -1,3 +1,5 @@
+import json
+
 from lstore.table import Table
 import os
 
@@ -6,6 +8,7 @@ from lstore.index_types.index_config import IndexConfig
 class Database():
 
     def __init__(self):
+        self.metadata_file = None
         self.tables = dict()
         self.path = None
 
@@ -23,8 +26,13 @@ class Database():
         if not os.path.exists(self.path):
             os.makedirs(self.path)
 
-        # Optional: Load metadata and initialize tables from storage files
-        # self._load_metadata()
+        # Load metadata from file to recreate tables if metadata exists
+        metadata_path = os.path.join(self.path, self.metadata_file)
+        if os.path.exists(metadata_path):
+            with open(metadata_path, 'r') as meta_file:
+                metadata = json.load(meta_file)
+            for table_name, table_info in metadata.get("tables", {}).items():
+                self._restore_table(table_name, table_info)
 
     def close(self):
         """
@@ -33,10 +41,44 @@ class Database():
         for table in self.tables.values():
             # Ensures any dirty pages are written to disk
             table.flush_pages()
-        # Clear tables in memory
+        # Save metadata about tables
+        self._save_metadata()
         self.tables.clear()
-        # Clear the database path reference
         self.path = None
+
+
+    def _save_metadata(self):
+        """
+        Saves the metadata for the database to the metadata file.
+        """
+        metadata = {
+            "tables": {
+                table_name: {
+                    "num_columns": table.num_columns,
+                    "key_index": table.key,
+                    # Save additional table settings as needed
+                } for table_name, table in self.tables.items()
+            }
+        }
+        metadata_path = os.path.join(self.path, self.metadata_file)
+        with open(metadata_path, 'w') as meta_file:
+            json.dump(metadata, meta_file)
+        print("Metadata saved successfully.")
+
+    def _restore_table(self, name, table_info):
+        """
+        Restores a table using the metadata loaded from disk.
+
+        :param name: The name of the table.
+        :param table_info: The metadata dictionary containing table details.
+        """
+        num_columns = table_info.get("num_columns")
+        key_index = table_info.get("key_index")
+        index_config = IndexConfig()  # Customize this if you have saved index details
+
+        table = Table(name, num_columns, key_index, index_config)
+        self.tables[name] = table  # Recreate the table in the database
+        print(f"Restored table '{name}' with {num_columns} columns.")
 
     """
     # Creates a new table

@@ -6,7 +6,7 @@ offsets.
 
 from typing import Literal
 
-from collections import OrderedDict # MRU cache
+from collections import OrderedDict  # MRU cache
 
 from lstore.storage.record import Record
 from lstore.storage.meta_col import MetaCol
@@ -17,6 +17,7 @@ from lstore.storage.buffer.page_table import PageTable, PageTableEntry
 from lstore import config
 
 from lstore.page import Page
+from lstore.storage.disk import Disk
 
 
 class Bufferpool:
@@ -43,6 +44,9 @@ class Bufferpool:
 
         # Maps page id to (tracker, col idx) for evictions
         self.reverse_tracker = dict()
+
+        #page id stuff
+        self.disk = Disk()
 
         self._new_vals_buffer = [None for _ in range(self.tcols)]
 
@@ -153,10 +157,10 @@ class Bufferpool:
         pages.write_vals(new_vals)
 
     def read(
-        self,
-        rid: RID,
-        proj_col_idx: list[Literal[0, 1]],
-        rel_version: int
+            self,
+            rid: RID,
+            proj_col_idx: list[Literal[0, 1]],
+            rel_version: int
     ) -> Record:
         """
         Reads a record (projected columns only) given an RID and its associated
@@ -228,7 +232,7 @@ class Bufferpool:
                     self._flush_page_to_disk(page)
 
                 return
-            
+
         raise RuntimeWarning("Tried to evict a page, but no unpinned pages available!")
 
     def _get_pages(self, is_base):
@@ -302,3 +306,16 @@ class Bufferpool:
     def _validate_not_deleted(self, rid, pages_id, offset):
         if RID(self._read_val(MetaCol.INDIR, pages_id, offset)).tombstone:
             raise KeyError(f"Record {rid} was deleted")
+
+    def fetch_page(self, page_id):
+        """
+        Fetch a page by page_id. If it’s not in memory, load it from disk.
+        """
+        page = self.page_table.get(page_id)
+        if page is None:
+            page_data = self.disk.get_page(page_id)
+            page = Page(page_id=page_id)
+            page.data = bytearray(page_data)
+            self.page_table[page_id] = page
+            self.page_table.move_to_end(page_id, last=True)
+        return page
