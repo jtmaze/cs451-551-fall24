@@ -10,13 +10,14 @@ class UIDGenerator:
     Creates and reads counter from a file.
     """
 
-    def __init__(self, name, file_dir, uid_bits, batch_size=100_000):
+    def __init__(self, name, file_dir, uid_bits, batch_size=100_000, even_only=False):
         self.name = name
+        self.even_only = even_only
 
         os.makedirs(file_dir, exist_ok=True)
 
         self.file_path = os.path.join(file_dir, f"{name}_gen.json")
-        self.max_val = (2 ** uid_bits) - 1
+        self.max_val = (2 ** uid_bits) - 2  # Avoid all bits set and ensure even
         self.batch_size = batch_size
 
         self.lock = threading.Lock()
@@ -40,8 +41,13 @@ class UIDGenerator:
                 raise ValueError(f"No more UIDs for '{self.name}' available")
 
             # Return the next UID in the batch
-            next_uid = self.current
-            self.current -= 1
+            if self.even_only:
+                # Ensure the current value is even
+                next_uid = self.current if self.current % 2 == 0 else self.current - 1
+                self.current = next_uid - 2
+            else:
+                next_uid = self.current
+                self.current -= 1
 
             return next_uid
 

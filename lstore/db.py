@@ -13,7 +13,9 @@ class Database():
     def __init__(self):
         self.metadata_file = "metadata.json"
         self.tables = dict()
-        self.path = None
+        self.path = "./db_storage/"
+
+        self.open(self.path)
 
     # Not required for milestone1
     def open(self, path):
@@ -39,7 +41,7 @@ class Database():
 
         # Set database path for UID generators
         RID.db_path = path
-        PageTable.db_path = path
+        PageTable.initialize_uid_gen(path)
 
     def close(self):
         """

@@ -54,7 +54,16 @@ class PageTableEntry:
 
 
 class PageTable:
-    pages_id_gen = UIDGenerator("pages_id", config.UID_DIR, RID.pages_id_bits, 10_000)
+    base_id_gen = None
+    tail_id_gen = None
+
+    @classmethod
+    def initialize_uid_gen(cls, db_path):
+        cls.base_id_gen = UIDGenerator("base_pages_id", db_path, 
+            RID.pages_id_bits, even_only=True)
+    
+        cls.tail_id_gen = UIDGenerator("tail_pages_id", db_path,
+            RID.pages_id_bits, even_only=True)
 
     def __init__(self, tcols) -> None:
         self.ptable = OrderedDict()
@@ -72,7 +81,13 @@ class PageTable:
         self.ptable.move_to_end(pages_id, last)
 
     def create_pages(self, is_base):
-        pages_id = PageTable.pages_id_gen.next_uid()
+        # Assign even or odd pages_id based on base/tail record
+        if is_base:
+            pages_id = PageTable.base_id_gen.next_uid()      # Even
+        else:
+            pages_id = PageTable.tail_id_gen.next_uid() - 1  # Odd
+        
+        print(is_base, pages_id)
 
         pages = PageTableEntry(pages_id, self.tcols, is_base)
 
