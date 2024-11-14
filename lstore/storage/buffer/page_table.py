@@ -7,15 +7,18 @@ from lstore.storage.uid_gen import UIDGenerator
 from lstore.storage.rid import RID
 
 class PageTableEntry:
-    def __init__(self, pages_id, tcols, is_base) -> None:
-        self.data = [Page(pages_id, is_base) for _ in range(tcols)]
+    def __init__(self, pages_id, total_cols) -> None:
+        self.data = [None for _ in range(total_cols)]
 
         self.id = pages_id
         
         self.bytes = 0
         self.next_size = config.RECORD_SIZE
 
-        self.size = tcols
+        self.size = total_cols
+
+    def create_new_pages(self, pages_id):
+        self.data = [Page(pages_id) for _ in range(self.size)]
 
     def get_loc(self):
         return self.id, self.bytes
@@ -25,6 +28,9 @@ class PageTableEntry:
     
     def __setitem__(self, index, value):
         self.data[index] = value
+
+    def __delitem__(self, index):
+        del self.data[index]
 
     def __len__(self):
         return len(self.data)
@@ -87,15 +93,20 @@ class PageTable:
         else:
             pages_id = PageTable.tail_id_gen.next_uid() - 1  # Odd
         
-        print(is_base, pages_id)
-
-        pages = PageTableEntry(pages_id, self.tcols, is_base)
+        pages = PageTableEntry(pages_id, self.tcols)
+        pages.create_new_pages(pages_id)
 
         self.ptable[pages_id] = pages
 
         self.size += self.tcols
 
         return pages, pages_id
+    
+    def init_pages(self, pages_id):
+        # Create page entry with no pages (filled with None)
+        self.ptable[pages_id] = PageTableEntry(pages_id)
+
+        return self.ptable[pages_id]
 
     def get_pages(self, pages_id):
         return self.ptable.get(pages_id, None)

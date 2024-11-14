@@ -278,6 +278,8 @@ class Bufferpool:
         pages_id, offset = rid.get_loc()
 
         page = self.page_table.get_page(pages_id, col)
+        if page is None:
+            page = self._fetch_page_from_disk(pages_id, col)
 
         page.update(val, offset)
         page.is_dirty = True
@@ -290,7 +292,6 @@ class Bufferpool:
         and a page id/offset.
         """
         page = self.page_table.get_page(pages_id, col)
-
         if page is None:
             page = self._fetch_page_from_disk(pages_id, col)
 
@@ -321,19 +322,23 @@ class Bufferpool:
         if RID(self._read_val(MetaCol.INDIR, pages_id, offset)).tombstone:
             raise KeyError(f"Record {rid} was deleted")
 
-    def _fetch_page_from_disk(self, pages_id, col, is_base):
+    def _fetch_page_from_disk(self, pages_id, col):
         """
         Fetch a page from the disk.
         """
         disk: Disk = self.table.disk
 
+        # Create page from disk
         page_data = disk.get_page(pages_id, col)
-
-        page = Page(pages_id, is_base)
+        page = Page(pages_id)
         page.data = bytearray(page_data)
 
         # Populate page table entry
-        self.page_table[page_id] = page
-        self.page_table.move_to_end(page_id, last=True)
+        pages: PageTableEntry = self.page_table.get_pages(pages_id)
+        if pages is None:
+            pages = self.page_table.init_pages(pages_id)
+        pages[col] = page
+
+        self.page_table.move_to_end(pages_id, last=True)
 
         return page

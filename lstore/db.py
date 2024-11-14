@@ -13,7 +13,7 @@ class Database():
     def __init__(self):
         self.metadata_file = "metadata.json"
         self.tables = dict()
-        self.path = "./db_storage/"
+        self.path = "./CS451"
 
         self.open(self.path)
 
@@ -31,6 +31,10 @@ class Database():
         if not os.path.exists(self.path):
             os.makedirs(self.path)
 
+        pages_path = os.path.join(self.path, "pages")
+        if not os.path.exists(pages_path):
+            os.makedirs(pages_path)
+
         # Load metadata from file to recreate tables if metadata exists
         metadata_path = os.path.join(self.path, self.metadata_file)
         if os.path.exists(metadata_path):
@@ -40,7 +44,7 @@ class Database():
                 self._restore_table(table_name, table_info)
 
         # Set database path for UID generators
-        RID.db_path = path
+        RID.initialize_uid_gen(path)
         PageTable.initialize_uid_gen(path)
 
     def close(self):
