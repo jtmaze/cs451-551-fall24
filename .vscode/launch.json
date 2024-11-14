@@ -42,5 +42,41 @@
                 //">", "tester_output/exam_tester_m1.txt"
             ]
         },
+        {
+            "name": "m2_tester_part1",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/m2_tester_part1.py",
+            "console": "integratedTerminal",
+            "args": [
+            ]
+        },
+        {
+            "name": "m2_tester_part2",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/m2_tester_part2.py",
+            "console": "integratedTerminal",
+            "args": [
+            ]
+        },
+        {
+            "name": "exam_tester_m2_part1",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/exam_tester_m2_part1.py",
+            "console": "integratedTerminal",
+            "args": [
+            ]
+        },
+        {
+            "name": "exam_tester_m2_part2",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/exam_tester_m2_part2.py",
+            "console": "integratedTerminal",
+            "args": [
+            ]
+        },
     ]
 }

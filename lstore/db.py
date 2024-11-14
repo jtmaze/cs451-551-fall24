@@ -3,12 +3,15 @@ import json
 from lstore.table import Table
 import os
 
+from lstore.storage.rid import RID
+from lstore.storage.buffer.page_table import PageTable
+
 from lstore.index_types.index_config import IndexConfig
 
 class Database():
 
     def __init__(self):
-        self.metadata_file = None
+        self.metadata_file = "metadata.json"
         self.tables = dict()
         self.path = None
 
@@ -34,6 +37,10 @@ class Database():
             for table_name, table_info in metadata.get("tables", {}).items():
                 self._restore_table(table_name, table_info)
 
+        # Set database path for UID generators
+        RID.db_path = path
+        PageTable.db_path = path
+
     def close(self):
         """
         Closes the database by ensuring all in-memory data is safely flushed to disk.
@@ -41,6 +48,7 @@ class Database():
         for table in self.tables.values():
             # Ensures any dirty pages are written to disk
             table.flush_pages()
+
         # Save metadata about tables
         self._save_metadata()
         self.tables.clear()
@@ -76,7 +84,7 @@ class Database():
         key_index = table_info.get("key_index")
         index_config = IndexConfig()  # Customize this if you have saved index details
 
-        table = Table(name, num_columns, key_index, index_config)
+        table = Table(name, num_columns, key_index, self.path, index_config)
         self.tables[name] = table  # Recreate the table in the database
         print(f"Restored table '{name}' with {num_columns} columns.")
 
@@ -98,7 +106,7 @@ class Database():
         if index_config is None:
             index_config = IndexConfig()
 
-        table = Table(name, num_columns, key_index, index_config)
+        table = Table(name, num_columns, key_index, self.path, index_config)
         self.tables[name] = table  # Add the table to the database's table dictionary.
         return table
 

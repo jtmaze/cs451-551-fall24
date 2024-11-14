@@ -16,7 +16,6 @@ from typing import Literal
 
 from lstore.storage.buffer.bufferpool import Bufferpool
 
-from lstore.storage.disk import Disk
 from lstore.storage.rid import RID
 
 from lstore.storage.record import Record
@@ -36,10 +35,6 @@ class Buffer:
 
         # Maps (logical page id->page) for each column (including metadata)
         self.bufferpool = Bufferpool(self.table)
-
-        # Disk ------------------------
-
-        self.disk = Disk()
 
     def insert_record(self, columns: tuple[int]) -> RID:
         """

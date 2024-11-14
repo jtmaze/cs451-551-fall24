@@ -11,6 +11,7 @@ from lstore.storage.buffer.buffer import Buffer
 from lstore.storage.record import Record
 from lstore.storage.rid import RID
 from lstore.storage.meta_col import MetaCol
+from lstore.storage.disk import Disk
 
 from lstore.index_types.index_config import IndexConfig
 
@@ -30,6 +31,7 @@ class Table:
         name: str,
         num_columns: int, 
         key: int,
+        db_path: str,
         index_config: IndexConfig
     ):
         if key >= num_columns:
@@ -38,15 +40,19 @@ class Table:
         self.name = name
         self.key = key
 
+        self.db_path = db_path
+
         self.num_columns = num_columns
         self.num_total_cols = num_columns + len(MetaCol)
-
-        # Given RID, returns records (checks bufferpool before disk)
-        self.buffer = Buffer(self)
 
         # Index for faster querying on primary key and possibly other columns
         # Creates a index for every column
         self.index = Index(self, 0, num_columns, index_config)
+
+        # Given RID, returns records (checks bufferpool before disk)
+        self.buffer = Buffer(self)
+
+        self.disk: Disk = Disk(self)
 
     def __merge(self):
         print("merge is happening")
@@ -152,14 +158,7 @@ class Table:
         """
         Writes all dirty pages in the buffer pool to disk and marks them as clean.
         """
-        for col_index, column_pages in enumerate(self.buffer.bufferpool.pages):
-            for page_id, page in column_pages.items():
-                if page.is_dirty:
-                    # disk write function
-                    # something like: self.buffer.disk.write_page(page_id, page.data)
-                    # After writing to disk, mark page as clean
-                    page.is_dirty = False
-                    print(f"Flushed page {page_id} in column {col_index} to disk.")
+        self.buffer.bufferpool.flush_to_disk()
 
     # Clear tables in memory
     def clear(self):

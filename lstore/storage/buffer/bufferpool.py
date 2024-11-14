@@ -45,9 +45,6 @@ class Bufferpool:
         # Maps page id to (tracker, col idx) for evictions
         self.reverse_tracker = dict()
 
-        #page id stuff
-        self.disk = Disk()
-
         self._new_vals_buffer = [None for _ in range(self.tcols)]
 
     def write(self, columns: tuple[int]) -> RID:
@@ -207,10 +204,22 @@ class Bufferpool:
         if page:
             page.pin_count = max(0, page.pin_count - 1)
 
+    def flush_to_disk(self):
+        """Flushes all pages in bufferpool's page table to the disk."""
+        for pages_id in self.page_table:
+            for i in range(self.tcols):
+                self._flush_page_to_disk(pages_id, i)
+
     # Helpers ------------------------
 
-    def _flush_page_to_disk(self, page):
-        pass
+    def _flush_page_to_disk(self, pages_id, col):
+        page: Page | None = self.page_table[pages_id].pop_page(col)
+
+        if page is not None and page.is_dirty:
+            self.table.disk.add_page(page, pages_id, col)
+
+            if config.DEBUG_PRINT:
+                print(f"Flushed page {pages_id} in column {col} to disk.")
 
     def _evict_page(self):
         raise NotImplementedError()
@@ -244,9 +253,11 @@ class Bufferpool:
         else:
             pages = None
 
+        # TODO: Fetch from disk?
+
         # Create new pages if necessary
         if pages is None or not pages.has_capacity():
-            pages, pages_id = self.page_table.create_pages()
+            pages, pages_id = self.page_table.create_pages(is_base)
 
             if self.max_buffer_size and self.page_table.size > self.max_buffer_size:
                 self._evict_page()
@@ -280,6 +291,9 @@ class Bufferpool:
         """
         page = self.page_table.get_page(pages_id, col)
 
+        if page is None:
+            page = self._fetch_page_from_disk(pages_id, col)
+
         self.page_table.move_to_end(pages_id, last=True)
 
         return page.read(offset)
@@ -307,15 +321,19 @@ class Bufferpool:
         if RID(self._read_val(MetaCol.INDIR, pages_id, offset)).tombstone:
             raise KeyError(f"Record {rid} was deleted")
 
-    def fetch_page(self, page_id):
+    def _fetch_page_from_disk(self, pages_id, col, is_base):
         """
-        Fetch a page by page_id. If it’s not in memory, load it from disk.
+        Fetch a page from the disk.
         """
-        page = self.page_table.get(page_id)
-        if page is None:
-            page_data = self.disk.get_page(page_id)
-            page = Page(page_id=page_id)
-            page.data = bytearray(page_data)
-            self.page_table[page_id] = page
-            self.page_table.move_to_end(page_id, last=True)
+        disk: Disk = self.table.disk
+
+        page_data = disk.get_page(pages_id, col)
+
+        page = Page(pages_id, is_base)
+        page.data = bytearray(page_data)
+
+        # Populate page table entry
+        self.page_table[page_id] = page
+        self.page_table.move_to_end(page_id, last=True)
+
         return page

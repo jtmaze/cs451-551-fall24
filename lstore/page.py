@@ -5,12 +5,15 @@ page_manager = PageManager()
 
 class Page:
 
-    def __init__(self, page_id = None):
-        self.id = page_id if page_id is not None else page_manager.generate_page_id()
+    def __init__(self, page_id, is_base):
+        self.id = page_id
         self.num_records = 0
         self.data = bytearray(config.PAGE_SIZE)
+
         self.is_dirty = False       # Dirty flag
         self.pin_count = 0          # Pin count
+        
+        self.is_base = is_base
 
     def has_capacity(self):
         record_size = config.RECORD_SIZE # Cache to skip namespace lookups
