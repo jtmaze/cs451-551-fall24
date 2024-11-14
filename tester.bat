@@ -24,8 +24,10 @@ if "%Test%"=="main" (
     py .\__main__.py > "%OutputDir%\__main__.txt"
 ) else if "%Test%"=="1" (
     py .\m1_tester.py > "%OutputDir%\m1_tester.txt"
-) else if "%Test%"=="2" (
-    py .\m2_tester.py > "%OutputDir%\m2_tester.txt"
+) else if "%Test%"=="21" (
+    py .\m2_tester_part1.py > "%OutputDir%\m2_tester_part1.txt"
+) else if "%Test%"=="22" (
+    py .\m2_tester_part2.py > "%OutputDir%\m2_tester_part2.txt"
 ) else if "%Test%"=="3" (
     py .\m3_tester.py > "%OutputDir%\m3_tester.txt"
 ) else if "%Test%"=="exam1" (

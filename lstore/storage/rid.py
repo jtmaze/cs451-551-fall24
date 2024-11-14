@@ -55,8 +55,12 @@ _FIELD_MASKS = tuple(
 class RID:
     pages_id_bits = _RID_BITS[_RIDField.PAGES_ID]
 
-    # Generator
-    uid_gen = UIDGenerator("rid", config.UID_DIR, _RID_BITS[_RIDField.UID])
+    # UID Generator
+    tail_id_gen = None
+
+    @classmethod
+    def initialize_uid_gen(cls, db_path):
+        cls.uid_gen = UIDGenerator("rid", db_path, _RID_BITS[_RIDField.UID])
 
     def __init__(self, rid_int: int):
         self._rid = rid_int
