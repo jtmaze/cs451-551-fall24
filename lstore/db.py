@@ -47,6 +47,9 @@ class Database():
         RID.initialize_uid_gen(path)
         PageTable.initialize_uid_gen(path)
 
+        # After loading tables, reconstruct indices
+        self.reconstruct_indices()
+
     def close(self):
         """
         Closes the database by ensuring all in-memory data is safely flushed to disk.
@@ -60,6 +63,14 @@ class Database():
         self.tables.clear()
         self.path = None
 
+    def reconstruct_indices(self):
+        """
+        Reconstructs the indices for each table in the database.
+        This function is called after restoring tables to ensure
+        all indices are accurate and up-to-date.
+        """
+        for table in self.tables.values():
+            table.reconstruct_index()
 
     def _save_metadata(self):
         """
@@ -82,9 +93,6 @@ class Database():
     def _restore_table(self, name, table_info):
         """
         Restores a table using the metadata loaded from disk.
-
-        :param name: The name of the table.
-        :param table_info: The metadata dictionary containing table details.
         """
         num_columns = table_info.get("num_columns")
         key_index = table_info.get("key_index")
@@ -92,14 +100,11 @@ class Database():
 
         table = Table(name, num_columns, key_index, self.path, index_config)
         self.tables[name] = table  # Recreate the table in the database
-        print(f"Restored table '{name}' with {num_columns} columns.")
 
-    """
-    # Creates a new table
-    :param name: string         #Table name
-    :param num_columns: int     #Number of Columns: all columns are integer
-    :param key: int             #Index of table key in columns
-    """
+        # Reconstruct the index
+        table.reconstruct_index()
+
+        print(f"Restored and indexed table '{name}' with {num_columns} columns.")
 
     def create_table(self, name, num_columns, key_index, index_config=None):
         """

@@ -340,3 +340,13 @@ class Bufferpool:
         self.page_table.move_to_end(pages_id, last=True)
 
         return page
+
+    def load_base_pages(self):
+        """
+        Ensures all base pages are loaded into the buffer pool.
+        """
+        for pages_id, page_entry in self.page_table:
+            if page_entry.data[0].is_base:  # Load only base pages
+                for col in range(self.tcols):
+                    if page_entry[col] is None:
+                        self._fetch_page_from_disk(pages_id, col)

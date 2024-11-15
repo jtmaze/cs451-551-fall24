@@ -54,6 +54,25 @@ class Table:
 
         self.disk: Disk = Disk(self)
 
+    def reconstruct_index(self):
+        """
+        Rebuilds the index from the existing data in the table's base pages.
+        """
+        print(f"Reconstructing index for table '{self.name}'...")
+        self.index.clear()  # Clear existing indices
+
+        # Scan all base records and insert them into the index
+        records_by_column = {i: [] for i in range(self.num_columns)}
+        for rid, record_values in self.buffer.scan_base_records():
+            for col_index, value in enumerate(record_values):
+                records_by_column[col_index].append((value, rid))
+
+        # Bulk insert into indices
+        for col_index, records in records_by_column.items():
+            self.index.bulk_insert(col_index, records)
+
+        print(f"Index reconstruction completed for table '{self.name}'.")
+
     def __merge(self):
         print("merge is happening")
 
