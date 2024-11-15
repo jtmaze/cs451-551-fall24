@@ -7,21 +7,22 @@ from lstore.storage.uid_gen import UIDGenerator
 from lstore.storage.rid import RID
 
 class PageTableEntry:
+    record_size = config.RECORD_SIZE
+    max_offset = config.PAGE_SIZE / record_size
+
     def __init__(self, pages_id, total_cols) -> None:
         self.data = [None for _ in range(total_cols)]
 
-        self.id = pages_id
+        self.pages_id = pages_id
+        self.total_cols = total_cols
         
-        self.bytes = 0
-        self.next_size = config.RECORD_SIZE
-
-        self.size = total_cols
+        self.offset = PageTableEntry.record_size * Page.num_header_records
 
     def create_new_pages(self, pages_id):
-        self.data = [Page(pages_id) for _ in range(self.size)]
+        self.data = [Page(pages_id) for _ in range(self.total_cols)]
 
     def get_loc(self):
-        return self.id, self.bytes
+        return self.pages_id, self.offset
 
     def __getitem__(self, index):
         return self.data[index]
@@ -36,15 +37,14 @@ class PageTableEntry:
         return len(self.data)
     
     def has_capacity(self):
-        return self.next_size <= config.PAGE_SIZE
+        return self.offset <= PageTableEntry.max_offset
     
     def write_vals(self, cols):
         for col, page in enumerate(self.data):
             page.write(cols[col])
             page.is_dirty = True
 
-        self.bytes += config.RECORD_SIZE
-        self.next_size += config.RECORD_SIZE
+        self.offset += PageTableEntry.record_size
 
     def pop_page(self, col):
         page = self[col]
@@ -52,8 +52,8 @@ class PageTableEntry:
         self.col = None
 
         # Update size and delete entry if empty
-        self.size -= 1
-        if self.size <= 0:
+        self.total_cols -= 1
+        if self.total_cols <= 0:
             del self[col]
 
         return page

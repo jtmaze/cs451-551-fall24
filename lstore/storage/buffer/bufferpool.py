@@ -249,7 +249,7 @@ class Bufferpool:
 
         if page_tracker:
             pages_id = next(reversed(page_tracker))
-            pages = self.page_table.get_pages(pages_id)
+            pages: PageTableEntry = self.page_table.get_pages(pages_id)
         else:
             pages = None
 
@@ -329,10 +329,8 @@ class Bufferpool:
         disk: Disk = self.table.disk
 
         # Create page from disk
-        page_data = disk.get_page(pages_id, col)
-        page = Page(pages_id)
-        page.data = bytearray(page_data)
-
+        page = disk.get_page(pages_id, col)
+        
         # Populate page table entry
         pages: PageTableEntry = self.page_table.get_pages(pages_id)
         if pages is None:

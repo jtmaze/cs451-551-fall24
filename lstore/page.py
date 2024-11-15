@@ -4,26 +4,38 @@ from lstore.storage.page_manager import PageManager
 page_manager = PageManager()
 
 class Page:
+    record_size = config.RECORD_SIZE
+    page_size = config.PAGE_SIZE
+
+    # Number of values in page header (currently: num_records)
+    num_header_records = 1
+    
+    max_records = (page_size // (record_size * 8)) - num_header_records
 
     def __init__(self, page_id):
         self.id = page_id
+        self.data = bytearray(Page.page_size)
+
+        # Use property setter to set number of records
         self.num_records = 0
-        self.data = bytearray(config.PAGE_SIZE)
 
         self.is_dirty = False       # Dirty flag
         self.pin_count = 0          # Pin count
         
     def has_capacity(self):
-        record_size = config.RECORD_SIZE # Cache to skip namespace lookups
-
-        return len(self.data) - self.num_records * record_size >= record_size
+        return self.num_records < Page.max_records
 
     def write(self, value):
-        if self.has_capacity():
-            record_size = config.RECORD_SIZE # Cache to skip namespace lookups
+        num_records = self.num_records # Cache result
 
-            start_index = self.num_records * record_size
+        if num_records < Page.max_records:
+            record_size = Page.record_size # Cache to skip namespace lookups
+
+            # Num records header + filled slots
+            start_index = record_size + num_records * record_size
+
             self.data[start_index:start_index + record_size] = value.to_bytes(record_size, byteorder='big', signed=True)
+
             self.num_records += 1
         else:
             # If the page is full, raise an exception
@@ -39,7 +51,7 @@ class Page:
         :returns: The integer value read from the offset.
         """
         # Extract the bytes from the page's data starting at the offset
-        value_bytes = self.data[offset:offset + config.RECORD_SIZE]
+        value_bytes = self.data[offset:offset + Page.record_size]
         # Convert the extracted bytes to an integer and return it
         return int.from_bytes(value_bytes, byteorder='big', signed=True)
     
@@ -49,7 +61,7 @@ class Page:
         :param val: The new value to be written.
         :param offset: The byte offset where the value should be updated.
         """
-        record_size = config.RECORD_SIZE # Cache to skip namespace lookups
+        record_size = Page.record_size # Cache to skip namespace lookups
 
         # Convert the new value to bytes and overwrite the old data
         self.data[offset:offset + record_size] = val.to_bytes(record_size, byteorder='big', signed=True)
@@ -57,13 +69,3 @@ class Page:
     def invalidate(self, rid):
         # TODO: Page 'deletion'
         raise NotImplementedError()
-    
-    def get_all_page_rids(self):
-        """
-        Returns a list of all RIDs in the page.
-        Method woud be useful in the merge_mgr.py, but maybe it should be in disk.py?
-        """
-        
-        pass
-    
-
