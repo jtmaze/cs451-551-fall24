@@ -95,3 +95,24 @@ class Index:
         #     else:
         #         self.indices[column_number][column_value] = [rid]
 
+
+    #new_______________for reconstructing index
+    def clear(self):
+        """
+        Clears all indices for this table.
+        """
+        for index in self.indices:
+            if index is not None:
+                index.clear()
+
+    def bulk_insert(self, col_number, records):
+        """
+        Bulk insert records into the index for a specific column.
+        :param col_number: Column number to index.
+        :param records: List of (value, RID) tuples.
+        """
+        if self.indices[col_number] is None:
+            return
+
+        for value, rid in records:
+            self.insert_val(col_number, value, rid)

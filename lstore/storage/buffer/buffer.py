@@ -19,6 +19,7 @@ from lstore.storage.buffer.bufferpool import Bufferpool
 from lstore.storage.rid import RID
 
 from lstore.storage.record import Record
+from lstore import config
 
 
 class Buffer:
@@ -81,3 +82,19 @@ class Buffer:
         # Update and save to page directory (for bufferpool to find)
         self.bufferpool.update(
             rid, 1, tuple(None for _ in range(self.table.num_columns)))
+
+    def scan_base_records(self):
+        """
+        Scans all base pages in the buffer pool and yields (RID, record values).
+        """
+        for pages_id, page_entry in self.bufferpool.page_table:
+            if not page_entry.data[0].is_base:  # Skip tail pages
+                continue
+
+            for offset in range(page_entry.bytes // config.RECORD_SIZE):
+                rid = RID.from_params(pages_id, offset, is_base=1, tombstone=0)
+                try:
+                    record = self.get_record(rid, [1] * self.table.num_columns, rel_version=0)
+                    yield rid, record.columns
+                except Exception as e:
+                    print(f"Error scanning base record {rid}: {e}")
