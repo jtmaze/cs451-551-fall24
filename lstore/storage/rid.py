@@ -77,7 +77,7 @@ class RID:
         Constructor with parameters. ex rid = RID.from_params(...)
         """
         # Set ID and ensure correct amount of bits
-        uid = RID.uid_gen.next_uid() & _RID_MASKS[_RIDField.UID]
+        uid = cls.uid_gen.next_uid() & _RID_MASKS[_RIDField.UID]
 
         # Mask each input to ensure correct bit width
         pages_id &= _RID_MASKS[_RIDField.PAGES_ID]

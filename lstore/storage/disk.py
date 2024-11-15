@@ -10,21 +10,21 @@ class Disk:
     def __init__(self, table) -> None:
         self.table = table
 
-    def _get_page_path(self, pages_id: int, col: int, offset: int):
+    def _get_page_path(self, pages_id: int, col: int):
         """
         Generates a file path for a given RID.
         """
         page_type = "tail" if pages_id % 2 else "base"
 
         return os.path.join(self.table.db_path,
-            f"pages/{page_type}_{pages_id}_{col}_{offset}.bin")
+            f"pages/{page_type}_{pages_id}_{col}.bin")
 
-    def get_page(self, pages_id: int, col: int, offset: int):
+    def get_page(self, pages_id: int, col: int):
         """
         Reads a 4KB page from disk corresponding to the given RID.
         Returns the page data as bytes.
         """
-        page_path = self._get_page_path(pages_id, col, offset)
+        page_path = self._get_page_path(pages_id, col)
 
         # Check if page file exists
         if not os.path.exists(page_path):
@@ -34,7 +34,7 @@ class Disk:
         with open(page_path, "rb") as file:
             data = file.read(self.PAGE_SIZE)
 
-        return data
+        return Page.from_data(data, pages_id)
     
     def add_page(self, page: Page, pages_id: int, col: int):
         """
@@ -45,9 +45,7 @@ class Disk:
         # if page.num_records * config.RECORD_SIZE != self.PAGE_SIZE:
         #     raise ValueError("Page data must be exactly 4KB.")
         
-        offset = page.num_records * config.RECORD_SIZE
-
-        page_path = self._get_page_path(pages_id, col, offset)
+        page_path = self._get_page_path(pages_id, col)
 
         # Write page data to the file
         with open(page_path, "wb") as file:

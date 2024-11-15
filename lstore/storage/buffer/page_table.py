@@ -7,21 +7,25 @@ from lstore.storage.uid_gen import UIDGenerator
 from lstore.storage.rid import RID
 
 class PageTableEntry:
-    def __init__(self, pages_id, total_cols) -> None:
+    record_size = config.RECORD_SIZE
+    page_size = config.PAGE_SIZE
+
+    def __init__(self, pages_id, total_cols, offset=None) -> None:
         self.data = [None for _ in range(total_cols)]
 
-        self.id = pages_id
-        
-        self.bytes = 0
-        self.next_size = config.RECORD_SIZE
+        self.pages_id = pages_id
+        self.total_cols = total_cols
 
-        self.size = total_cols
+        self.page_count = 0
+        
+        self.offset = PageTableEntry.record_size if offset is None else offset
 
     def create_new_pages(self, pages_id):
-        self.data = [Page(pages_id) for _ in range(self.size)]
+        self.data = [Page(pages_id) for _ in range(self.total_cols)]
+        self.page_count = self.total_cols
 
     def get_loc(self):
-        return self.id, self.bytes
+        return self.pages_id, self.offset
 
     def __getitem__(self, index):
         return self.data[index]
@@ -36,28 +40,26 @@ class PageTableEntry:
         return len(self.data)
     
     def has_capacity(self):
-        return self.next_size <= config.PAGE_SIZE
+        return self.offset + PageTableEntry.record_size <= PageTableEntry.page_size
     
     def write_vals(self, cols):
         for col, page in enumerate(self.data):
             page.write(cols[col])
             page.is_dirty = True
 
-        self.bytes += config.RECORD_SIZE
-        self.next_size += config.RECORD_SIZE
+        self.offset += PageTableEntry.record_size
 
     def pop_page(self, col):
         page = self[col]
 
-        self.col = None
+        self.data[col] = None
 
         # Update size and delete entry if empty
-        self.size -= 1
-        if self.size <= 0:
+        self.page_count -= 1
+        if self.page_count <= 0:
             del self[col]
 
         return page
-
 
 class PageTable:
     base_id_gen = None
@@ -102,9 +104,11 @@ class PageTable:
 
         return pages, pages_id
     
-    def init_pages(self, pages_id):
+    def init_pages(self, pages_id, offset):
         # Create page entry with no pages (filled with None)
-        self.ptable[pages_id] = PageTableEntry(pages_id)
+        page_entry = PageTableEntry(pages_id, self.tcols, offset=offset)
+
+        self.ptable[pages_id] = page_entry
 
         return self.ptable[pages_id]
 

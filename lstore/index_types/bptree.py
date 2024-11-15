@@ -178,6 +178,7 @@ class BPTree:
 ### B+ Tree Implementation
 class BPTreeIndex(IndexType):
     def __init__(self, n=100):
+        self.n = n
         self.tree = BPTree(n=n) # Adjust n as needed to test performance
     
     def get(self, val) -> list[RID]:
@@ -213,3 +214,6 @@ class BPTreeIndex(IndexType):
         !!! Values will be deleted from leafs, but tree won't rebalance yet.
         """
         self.tree.delete(val)
+
+    def clear(self):
+        self.tree = BPTree(n=self.n)
