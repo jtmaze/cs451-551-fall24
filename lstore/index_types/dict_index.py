@@ -44,3 +44,6 @@ class DictIndex(IndexType):
 
     def delete(self, val):
         del self.data[val]
+
+    def clear(self):
+        self.data = dict()
