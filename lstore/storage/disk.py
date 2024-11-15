@@ -34,11 +34,7 @@ class Disk:
         with open(page_path, "rb") as file:
             data = file.read(self.PAGE_SIZE)
 
-        page = Page(pages_id)
-        page.data = bytearray(data)
-        # page.num_records is property, contained in data already
-
-        return data
+        return Page.from_data(data, pages_id)
     
     def add_page(self, page: Page, pages_id: int, col: int):
         """

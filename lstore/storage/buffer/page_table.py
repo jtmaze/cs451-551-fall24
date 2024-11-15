@@ -8,18 +8,21 @@ from lstore.storage.rid import RID
 
 class PageTableEntry:
     record_size = config.RECORD_SIZE
-    max_offset = config.PAGE_SIZE / record_size
+    page_size = config.PAGE_SIZE
 
-    def __init__(self, pages_id, total_cols) -> None:
+    def __init__(self, pages_id, total_cols, offset=None) -> None:
         self.data = [None for _ in range(total_cols)]
 
         self.pages_id = pages_id
         self.total_cols = total_cols
+
+        self.page_count = 0
         
-        self.offset = PageTableEntry.record_size * Page.num_header_records
+        self.offset = PageTableEntry.record_size if offset is None else offset
 
     def create_new_pages(self, pages_id):
         self.data = [Page(pages_id) for _ in range(self.total_cols)]
+        self.page_count = self.total_cols
 
     def get_loc(self):
         return self.pages_id, self.offset
@@ -37,7 +40,7 @@ class PageTableEntry:
         return len(self.data)
     
     def has_capacity(self):
-        return self.offset <= PageTableEntry.max_offset
+        return self.offset + PageTableEntry.record_size <= PageTableEntry.page_size
     
     def write_vals(self, cols):
         for col, page in enumerate(self.data):
@@ -49,15 +52,14 @@ class PageTableEntry:
     def pop_page(self, col):
         page = self[col]
 
-        self.col = None
+        self.data[col] = None
 
         # Update size and delete entry if empty
-        self.total_cols -= 1
-        if self.total_cols <= 0:
+        self.page_count -= 1
+        if self.page_count <= 0:
             del self[col]
 
         return page
-
 
 class PageTable:
     base_id_gen = None
@@ -102,9 +104,11 @@ class PageTable:
 
         return pages, pages_id
     
-    def init_pages(self, pages_id):
+    def init_pages(self, pages_id, offset):
         # Create page entry with no pages (filled with None)
-        self.ptable[pages_id] = PageTableEntry(pages_id)
+        page_entry = PageTableEntry(pages_id, self.tcols, offset=offset)
+
+        self.ptable[pages_id] = page_entry
 
         return self.ptable[pages_id]
 

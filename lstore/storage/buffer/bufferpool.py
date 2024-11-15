@@ -334,7 +334,7 @@ class Bufferpool:
         # Populate page table entry
         pages: PageTableEntry = self.page_table.get_pages(pages_id)
         if pages is None:
-            pages = self.page_table.init_pages(pages_id)
+            pages = self.page_table.init_pages(pages_id, page.offset)
         pages[col] = page
 
         self.page_table.move_to_end(pages_id, last=True)
