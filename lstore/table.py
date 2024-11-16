@@ -6,7 +6,7 @@ buffer and indices for performant querying.
 
 from typing import Literal
 
-import concurrent.futures # For running merge in background
+import concurrent.futures
 
 from lstore.index import Index
 from lstore.storage.buffer.buffer import Buffer
@@ -102,9 +102,6 @@ class Table:
         # Update primary key's index
         for i in range(0, self.num_columns):
             self.index.insert_val(i, columns[i], rid, is_prim_key = (i == self.key))
-
-        # TODO: Update other indices
-        pass
 
     def select(
         self,
@@ -204,19 +201,13 @@ class Table:
         print("Cleared all in-memory pages from the table.")
 
     def merge(self):
-        self.flush_pages()
+        # self.flush_pages()
 
-        if __name__ == "__main__":  # ie is this actually being run rather than imported
-            # Create background process to merge
-            with concurrent.futures.ProcessPoolExecutor() as executor:
-                # Background process will do merge and write to pages/temp/
-                merge_future = executor.submit(self.merge_mgr.merge)
-            
-                # Main process will finalize merge
-                merge_future.add_done_callback(
-                    self.merge_mgr.finalize_merge)
-        else:
-            raise RuntimeError("Merge should be called by main only!")
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            merge_future = executor.submit(self.merge_mgr.merge)
+        
+            merge_future.add_done_callback(
+                self.merge_mgr.finalize_merge)        
 
         self.num_updates = 0
 
