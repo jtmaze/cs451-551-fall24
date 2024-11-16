@@ -6,12 +6,15 @@ buffer and indices for performant querying.
 
 from typing import Literal
 
+import concurrent.futures # For running merge in background
+
 from lstore.index import Index
 from lstore.storage.buffer.buffer import Buffer
 from lstore.storage.record import Record
 from lstore.storage.rid import RID
 from lstore.storage.meta_col import MetaCol
 from lstore.storage.disk import Disk
+from lstore.storage.buffer.merge_mgr import MergeManager
 
 from lstore.index_types.index_config import IndexConfig
 
@@ -54,6 +57,10 @@ class Table:
 
         self.disk: Disk = Disk(self)
 
+        self.num_updates = 0
+        self.merge_threshold = config.MERGE_UPDATE_THRESHOLD
+        self.merge_mgr: MergeManager = MergeManager(self)
+
     def reconstruct_index(self):
         """
         Rebuilds the index from the existing data in the table's base pages.
@@ -73,8 +80,7 @@ class Table:
 
         print(f"Index reconstruction completed for table '{self.name}'.")
 
-    def __merge(self):
-        print("merge is happening")
+    # Core operations ----------------------
 
     def insert(self, columns: tuple[int]):
         """
@@ -152,7 +158,6 @@ class Table:
 
         return records
 
-
     def update(self, rid: RID, columns: tuple[int]):
         """
         Updates the record with the given RID. This updates the base record's
@@ -164,6 +169,10 @@ class Table:
         """
         self.buffer.update_record(rid, columns)
 
+        self.num_updates += 1
+        if self.num_updates >= self.merge_threshold:
+            self.merge()
+
     def delete(self, rid: RID):
         """
         Deletes the record with the given RID by marking it invalid
@@ -172,6 +181,7 @@ class Table:
         """
         self.buffer.delete_record(rid)
 
+    # Utility ----------------------
 
     def flush_pages(self):
         """
@@ -179,7 +189,6 @@ class Table:
         """
         self.buffer.bufferpool.flush_to_disk()
 
-    # Clear tables in memory
     def clear(self):
         """
         Clears in-memory pages from the table, making sure to flush all dirty pages first.
@@ -192,10 +201,19 @@ class Table:
         self.buffer.bufferpool.pages = [dict() for _ in range(self.buffer.bufferpool.total_columns)]
         print("Cleared all in-memory pages from the table.")
 
+    def merge(self):
+        # Create background process to merge
+        #with concurrent.futures.ProcessPoolExecutor() as executor:
+
+        # self.flush_pages()
+
+        self.merge_mgr.merge()
+
+        self.num_updates = 0
+
     def __del__(self):
         """
         Table destructor. Writes pages only in memory to disk.
         """
         # TODO: Write buffer pages to disk
         pass
-

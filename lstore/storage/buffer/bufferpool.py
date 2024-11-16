@@ -213,7 +213,8 @@ class Bufferpool:
     # Helpers ------------------------
 
     def _flush_page_to_disk(self, pages_id, col):
-        page: Page | None = self.page_table[pages_id].pop_page(col)
+        """Currently writes page to disk."""
+        page: Page | None = self.page_table.get_page(pages_id, col)
 
         if page is not None and page.is_dirty:
             self.table.disk.add_page(page, pages_id, col)
