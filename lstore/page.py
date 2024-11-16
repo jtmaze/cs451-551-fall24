@@ -98,3 +98,11 @@ class Page:
         self.offset = value
         self.data[:Page.record_size] = value.to_bytes(
             Page.record_size, byteorder="big", signed=True)
+        
+    def _increment_offset(self):
+        record_size = Page.record_size
+        
+        self.offset += record_size
+
+        self.data[:Page.record_size] = self.offset.to_bytes(
+            Page.record_size, byteorder="big", signed=True)

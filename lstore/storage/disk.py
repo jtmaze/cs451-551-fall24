@@ -124,6 +124,8 @@ class Disk:
 
         with os.scandir(dir) as entries:
             rid_idx_substr = f"_{MetaCol.RID}."
+
+            # Get all filepaths of given type and with a indexed column label
             filepaths = [
                 os.path.join(dir, entry.name) for entry in entries if 
                 all(substr in entry.name for substr in (page_type, rid_idx_substr))

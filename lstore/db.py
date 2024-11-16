@@ -15,7 +15,8 @@ class Database():
         self.tables = dict()
         self.path = "./CS451"
 
-        self._set_uid_gen_path(self.path)
+        self._create_db_storage()
+        self._set_uid_gen_path()
 
     # Not required for milestone1
     def open(self, path):
@@ -27,24 +28,9 @@ class Database():
         """
         self.path = path
 
-        # Create directory for database files if it doesn't exist
-        if not os.path.exists(self.path):
-            os.makedirs(self.path)
-
-        pages_path = os.path.join(self.path, "pages")
-        if not os.path.exists(pages_path):
-            os.makedirs(pages_path)
-
-        # Load metadata from file to recreate tables if metadata exists
-        metadata_path = os.path.join(self.path, self.metadata_file)
-        if os.path.exists(metadata_path):
-            with open(metadata_path, 'r') as meta_file:
-                metadata: dict = json.load(meta_file)
-            for table_name, table_info in metadata.get("tables", {}).items():
-                self._restore_table(table_name, table_info)
-
-        # Overwrite database path for UID generators
-        self._set_uid_gen_path(path)
+        # If DNE, create storage folder and overwrite path for UID gen
+        self._create_db_storage()
+        self._set_uid_gen_path()
 
     def close(self):
         """
@@ -106,9 +92,26 @@ class Database():
 
         print(f"Restored and indexed table '{name}' with {num_columns} columns.")
 
-    def _set_uid_gen_path(self, path):
-        RID.initialize_uid_gen(path)
-        PageTable.initialize_uid_gen(path)
+    def _set_uid_gen_path(self):
+        RID.initialize_uid_gen(self.path)
+        PageTable.initialize_uid_gen(self.path)
+
+    def _create_db_storage(self):
+        # Create directory for database files if it doesn't exist
+        if not os.path.exists(self.path):
+            os.makedirs(self.path)
+
+        pages_path = os.path.join(self.path, "pages")
+        if not os.path.exists(pages_path):
+            os.makedirs(pages_path)
+
+        # Load metadata from file to recreate tables if metadata exists
+        metadata_path = os.path.join(self.path, self.metadata_file)
+        if os.path.exists(metadata_path):
+            with open(metadata_path, 'r') as meta_file:
+                metadata: dict = json.load(meta_file)
+            for table_name, table_info in metadata.get("tables", {}).items():
+                self._restore_table(table_name, table_info)
 
     def create_table(self, name, num_columns, key_index, index_config=None):
         """

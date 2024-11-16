@@ -204,12 +204,19 @@ class Table:
         print("Cleared all in-memory pages from the table.")
 
     def merge(self):
-        # Create background process to merge
-        #with concurrent.futures.ProcessPoolExecutor() as executor:
+        self.flush_pages()
 
-        # self.flush_pages()
-
-        self.merge_mgr.merge()
+        if __name__ == "__main__":  # ie is this actually being run rather than imported
+            # Create background process to merge
+            with concurrent.futures.ProcessPoolExecutor() as executor:
+                # Background process will do merge and write to pages/temp/
+                merge_future = executor.submit(self.merge_mgr.merge)
+            
+                # Main process will finalize merge
+                merge_future.add_done_callback(
+                    self.merge_mgr.finalize_merge)
+        else:
+            raise RuntimeError("Merge should be called by main only!")
 
         self.num_updates = 0
 
