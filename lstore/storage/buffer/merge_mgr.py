@@ -141,23 +141,23 @@ class MergeManager:
     def _find_latest_tail_records(self, base_data: list[tuple[int]]) -> dict[RID, Record]:
         """
         Inputs: A list of base records (as tuples?)
-        Returns: The most up-to-date tail record for each base record's RID
+        Returns: The most up-to-date tail record (on disk) for each base record's RID
         """
         def _get_tail_tuple():
             tail_tuple = []
-
+            # Fetch the page for every column in the table
             for col in range(tcols):
                 page = temp_table[page_id][col]
-
+                # Check if page is already in memory
                 if page is None:
-                    try:
+                    try: # If not, fetch it from disk
                         page = disk.get_page(page_id, col)
                         temp_table[page_id][col] = page
                     except FileNotFoundError:
                         return None
 
                 tail_tuple.append(page.read(offset))
-
+            # Tuple with all columns for a given tail RID
             return tail_tuple
 
         disk: Disk = self.table.disk
@@ -172,6 +172,7 @@ class MergeManager:
             page_id, offset = indir.get_loc()
 
             tail_tuple = _get_tail_tuple()
+            # Handles case tails aren't on disk for a given base record. Could be no writes yet, or on committed writes. 
             if tail_tuple is None:
                 continue
 
@@ -190,6 +191,7 @@ class MergeManager:
     #     # base_data =
     #     new_base_records = base_records.copy()
 
+<<<<<<< Updated upstream
     #     for base_record in base_records:
 
     #         base_rid_value = base_record[MetaCol.RID]
@@ -199,6 +201,18 @@ class MergeManager:
     #             )            
 
     #     return new_base_records
+=======
+            base_rid = base_record[MetaCol.RID]
+            
+            if base_rid in updated_tails:
+                # Merge record should be identical to the corresponding updated tail
+                merge_record = updated_tails[base_rid] 
+                new_base_records.append(merge_record)
+            else:
+                new_base_records.append(base_record)
+
+        return new_base_records
+>>>>>>> Stashed changes
 
     def update_page_directory(self):
         """
