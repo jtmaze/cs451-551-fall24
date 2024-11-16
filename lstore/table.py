@@ -61,7 +61,7 @@ class Table:
         self.merge_threshold = config.MERGE_UPDATE_THRESHOLD
         self.merge_mgr: MergeManager = MergeManager(self)
 
-    def reconstruct_index(self):
+    def reconstruct_index(self, index_cols: list[int]):
         """
         Rebuilds the index from the existing data in the table's base pages.
         """
@@ -70,8 +70,10 @@ class Table:
 
         # Scan all base records and insert them into the index
         records_by_column = {i: [] for i in range(self.num_columns)}
-        for rid, record_values in self.buffer.scan_base_records():
-            for col_index, value in enumerate(record_values):
+
+        for rid, record_values in self.disk.scan_base_records(index_cols):
+            # for col_index, value in enumerate(record_values):
+            for col_index, value in zip(index_cols, record_values):
                 records_by_column[col_index].append((value, rid))
 
         # Bulk insert into indices
