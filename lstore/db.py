@@ -15,7 +15,7 @@ class Database():
         self.tables = dict()
         self.path = "./CS451"
 
-        self.open(self.path)
+        self._set_uid_gen_path(self.path)
 
     # Not required for milestone1
     def open(self, path):
@@ -39,16 +39,12 @@ class Database():
         metadata_path = os.path.join(self.path, self.metadata_file)
         if os.path.exists(metadata_path):
             with open(metadata_path, 'r') as meta_file:
-                metadata = json.load(meta_file)
+                metadata: dict = json.load(meta_file)
             for table_name, table_info in metadata.get("tables", {}).items():
                 self._restore_table(table_name, table_info)
 
-        # Set database path for UID generators
-        RID.initialize_uid_gen(path)
-        PageTable.initialize_uid_gen(path)
-
-        # After loading tables, reconstruct indices
-        self.reconstruct_indices()
+        # Overwrite database path for UID generators
+        self._set_uid_gen_path(path)
 
     def close(self):
         """
@@ -76,15 +72,19 @@ class Database():
         """
         Saves the metadata for the database to the metadata file.
         """
-        metadata = {
-            "tables": {
-                table_name: {
-                    "num_columns": table.num_columns,
-                    "key_index": table.key,
-                    # Save additional table settings as needed
-                } for table_name, table in self.tables.items()
+        metadata = {"tables": dict()}
+
+        for table_name, table in self.tables.items():
+            indices = table.index.indices
+            index_cols = [i for i in range(len(indices)) if indices[i] is not None]
+
+            metadata["tables"][table_name] = {
+                "num_columns": table.num_columns,
+                "key_index": table.key,
+                "index_cols": index_cols,
+                # Save additional table settings as needed
             }
-        }
+
         metadata_path = os.path.join(self.path, self.metadata_file)
         with open(metadata_path, 'w') as meta_file:
             json.dump(metadata, meta_file)
@@ -102,9 +102,13 @@ class Database():
         self.tables[name] = table  # Recreate the table in the database
 
         # Reconstruct the index
-        table.reconstruct_index()
+        table.reconstruct_index(table_info.get("index_cols"))
 
         print(f"Restored and indexed table '{name}' with {num_columns} columns.")
+
+    def _set_uid_gen_path(self, path):
+        RID.initialize_uid_gen(path)
+        PageTable.initialize_uid_gen(path)
 
     def create_table(self, name, num_columns, key_index, index_config=None):
         """

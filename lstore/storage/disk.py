@@ -3,6 +3,8 @@ import os
 from lstore import config
 
 from lstore.page import Page
+from lstore.storage.meta_col import MetaCol
+from lstore.storage.rid import RID
 
 class Disk:
     PAGE_SIZE = config.PAGE_SIZE  # 4KB page size
@@ -62,3 +64,69 @@ class Disk:
             if page.is_dirty:  # write dirty pages
                 self.add_page(page_id, page.data)
                 page.is_dirty = False  # Mark page as clean
+
+    def scan_base_records(self, index_cols: list[int]):
+        """
+        Generates RID & column value pairs where the column values are tuples
+        of data values corresponding to the given index columns.
+        """
+        path = f"{self.table.db_path}/pages/"
+
+        # Get all filepaths for base pages with RIDs
+        rid_filepaths = self._get_rid_filepaths(path, is_base=True)
+
+        # Offset index column indices to match page names on disk
+        num_metadata_cols = len(MetaCol)
+        real_index_cols = [col + num_metadata_cols for col in index_cols]
+
+        # For each RID page
+        for rid_path in rid_filepaths:
+            pages_id = rid_path.split("_")[1]  # Get pages_id from name
+
+            # Read page from disk
+            with open(rid_path, "rb") as file:
+                bytes = file.read(self.PAGE_SIZE)
+                rid_page = Page.from_data(bytes, pages_id)
+
+            # For each rid, get its corresponding index column data
+            for rid in rid_page:
+                rid = RID(rid)
+                _, offset = rid.get_loc()
+
+                columns = []
+
+                for col in real_index_cols:
+                    data_path = os.path.join(path, f"base_{pages_id}_{col}.bin")
+
+                    with open(data_path, "rb") as file:
+                        bytes = file.read(self.PAGE_SIZE)
+                        data_page = Page.from_data(bytes, pages_id)
+
+                    columns.append(data_page.read(offset))
+
+                yield rid, columns
+
+        # for pages_id, page_entry in self.bufferpool.page_table:
+        #     if not page_entry.data[0].is_base:  # Skip tail pages
+        #         continue
+
+        #     for offset in range(page_entry.bytes // config.RECORD_SIZE):
+        #         rid = RID.from_params(pages_id, offset, is_base=1, tombstone=0)
+        #         try:
+        #             record = self.get_record(rid, [1] * self.table.num_columns, rel_version=0)
+        #             yield rid, record.columns
+        #         except Exception as e:
+        #             print(f"Error scanning base record {rid}: {e}")
+
+    def _get_rid_filepaths(self, dir, is_base=True):
+        """Gets filepaths of base or tail pages for given index columns."""
+        page_type = "base" if is_base else "tail"
+
+        with os.scandir(dir) as entries:
+            rid_idx_substr = f"_{MetaCol.RID}."
+            filepaths = [
+                os.path.join(dir, entry.name) for entry in entries if 
+                all(substr in entry.name for substr in (page_type, rid_idx_substr))
+            ]
+
+        return filepaths

@@ -22,7 +22,7 @@ class Page:
         page.offset = int.from_bytes(
             data[:Page.record_size], byteorder="big", signed=True)
 
-        page.data = data
+        page.data = bytearray(data)
 
         return page
     
