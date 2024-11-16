@@ -15,6 +15,8 @@ class Database():
         self.tables = dict()
         self.path = "./CS451"
 
+        self._set_uid_gen_path(self.path)
+
     # Not required for milestone1
     def open(self, path):
         """
@@ -41,9 +43,8 @@ class Database():
             for table_name, table_info in metadata.get("tables", {}).items():
                 self._restore_table(table_name, table_info)
 
-        # Set database path for UID generators
-        RID.initialize_uid_gen(path)
-        PageTable.initialize_uid_gen(path)
+        # Overwrite database path for UID generators
+        self._set_uid_gen_path(path)
 
     def close(self):
         """
@@ -104,6 +105,10 @@ class Database():
         table.reconstruct_index(table_info.get("index_cols"))
 
         print(f"Restored and indexed table '{name}' with {num_columns} columns.")
+
+    def _set_uid_gen_path(self, path):
+        RID.initialize_uid_gen(path)
+        PageTable.initialize_uid_gen(path)
 
     def create_table(self, name, num_columns, key_index, index_config=None):
         """
