@@ -188,18 +188,17 @@ class BPTreeIndex(IndexType):
         if values is None:
             return []
         else:
-            # Maybe flatten?
-            return values
+            # Return the latest inserted value in a list
+            return [values[-1]]
         
     def get_range_val(self, begin, end):
         """
         Gets list of RIDs with column value all between begin and end value
         """
         results = self.tree.get_range_val(begin, end)
-        # Will need to flatten results, becuase could have buckets in BPTree
-        # i.e. multiple values per key
-        flattened_results = [val for sublist in results for val in sublist]
-        return flattened_results
+        # Extract the latest value (most recent) from each key's values
+        latest_values = [sublist[-1] for sublist in results if sublist]
+        return latest_values
     
     def get_range_key(self, begin, end):
         """

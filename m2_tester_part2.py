@@ -53,8 +53,8 @@ for i in range(0, number_of_aggregates):
         print('sum error on [', keys[r[0]], ',', keys[r[1]], ']: ', result, ', correct: ', column_sum)
 print("Aggregate finished")
 
-deleted_keys = sample(keys, 100)
-for key in deleted_keys:
+# deleted_keys = sample(keys, 100)
+for key in keys:
     query.delete(key)
     records.pop(key, None)
 

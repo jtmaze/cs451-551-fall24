@@ -172,7 +172,7 @@ class Table:
                     self.buffer.get_record(rid, proj_col_idx, rel_version)
                 )
             except Exception as e:
-                print(f"Failed to find rid={rid}")
+                print(f"Failed to find rid={rid.rid}")
 
         return records
 
