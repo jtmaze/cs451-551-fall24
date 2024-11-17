@@ -83,7 +83,7 @@ class PageTable:
     
     def __getitem__(self, key):
         return self.ptable[key]
-
+    
     def create_pages(self, is_base):
         # Assign even or odd pages_id based on base/tail record
         if is_base:
@@ -91,6 +91,7 @@ class PageTable:
         else:
             pages_id = PageTable.tail_id_gen.next_uid() - 1  # Odd
         
+        # Init table entry and populate with pages
         pages = PageTableEntry(pages_id, self.tcols)
         pages.create_new_pages(pages_id)
 

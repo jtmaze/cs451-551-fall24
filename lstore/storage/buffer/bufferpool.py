@@ -37,7 +37,7 @@ class Bufferpool:
         self.use_lru = config.USE_LRU_NOT_MRU
         self.max_buffer_size = config.MAX_BUFFER_PAGES
         if self.max_buffer_size is not None:
-            # Ensure the buffer size can at least contain latest base & tail pages
+            # Ensure the buffer size can at least contain sets of read/write base/tail pages (4)
             self.max_buffer_size = max(self.tcols * 4, self.max_buffer_size)
 
         # Global page table for LRU/MRU eviction
@@ -236,14 +236,17 @@ class Bufferpool:
         else:
             pages = None
 
-        # Create new pages if necessary
-        if pages is None or not pages.has_capacity():
+        if pages is None:
+            pages, pages_id = self.page_table.create_pages(is_base)
+            page_tracker[pages_id] = None  # Value doesn't matter, used as ordered set
+        elif not pages.has_capacity():
             pages, pages_id = self.page_table.create_pages(is_base)
 
-            # Update for eviction
+            # Add full pages to the evict queue
             if self.max_buffer_size:
                 for col in range(self.tcols):
                     self.evict_queue[(pages_id, col)] = None
+                    self.evict_queue.move_to_end((pages_id, col), last=self.use_lru)
                     self._evict_pages()
 
             page_tracker[pages_id] = None  # Value doesn't matter, used as ordered set
@@ -257,16 +260,7 @@ class Bufferpool:
         pages_id, offset = rid.get_loc()
 
         page = self.page_table.get_page(pages_id, col)
-
-        if page is None:
-            page = self._fetch_page_from_disk(pages_id, col)
-
-            if self.max_buffer_size:
-                self.evict_queue[(pages_id, col)] = None
-                self._evict_pages()
-        elif self.max_buffer_size:
-            self.evict_queue.move_to_end((pages_id, col), last=self.use_lru)
-            self._evict_pages()
+        self._validate_read_page(page, pages_id, col)
 
         page.update(val, offset)
         page.is_dirty = True
@@ -277,18 +271,26 @@ class Bufferpool:
         and a page id/offset.
         """
         page = self.page_table.get_page(pages_id, col)
+        page = self._validate_read_page(page, pages_id, col)
 
+        return page.read(offset)
+    
+    def _validate_read_page(self, page, pages_id, col):
         if page is None:
             page = self._fetch_page_from_disk(pages_id, col)
 
             if self.max_buffer_size:
                 self.evict_queue[(pages_id, col)] = None
+                self.evict_queue.move_to_end((pages_id, col), last=self.use_lru)
                 self._evict_pages()
         elif self.max_buffer_size:
-            self.evict_queue.move_to_end((pages_id, col), last=self.use_lru)
-            self._evict_pages()
+            try:
+                self.evict_queue.move_to_end((pages_id, col), last=self.use_lru)
+                self._evict_pages()
+            except KeyError:
+                pass
 
-        return page.read(offset)
+        return page
 
     def _get_versioned_indices(self, pages_id, offset, rel_version):
         """

@@ -1,6 +1,6 @@
 PAGE_SIZE = 4096
 RECORD_SIZE = 128 // 8
-MAX_BUFFER_PAGES = 1000   # Maximum number of pages in buffer (None -> uncapped)
+MAX_BUFFER_PAGES = 10_000   # Maximum number of pages in buffer (None -> uncapped)
 PRINT_ERRORS = True
 DEBUG_PRINT = True
 UID_DIR = "db_storage/"
