@@ -2,9 +2,9 @@
 Steps to the Merge Algorithm as we're implementing it:
 1. Get a batch of base pages could be from disk or buffer (buffer is probably faster)
 2. Get corresponding tail pages for the base RIDs. 
-3. Consolidate base records with update tail records
-4. Update the page directory with the new base records
-5. De-allocate the outdated base pages
+3. Consolidate base records with updated tail records
+4. Put updated pages on disk in temp folder
+5. Swap out the disk's old base pages with new base pages
 
 # Stupid/simple questions:
 - How do we set up a "background thread" to run the merge manager?
@@ -16,9 +16,6 @@ Steps to the Merge Algorithm as we're implementing it:
 - Granularity of the merge operation: 
     - Easiest approach seems coarser-grained and less frequent merges?
     - Is this a question of how many committed tail records we fetch in each batch??
-
-- When loading corresponding base pages, use the get_page method from disk.py, or go from buffer pool??
-
 
 """
 from collections import namedtuple
@@ -239,20 +236,7 @@ class MergeManager:
                 with open(path, "wb") as file:
                     file.write(page.data)
 
-    def update_page_directory(self):
-        """
-        
-        This is the only 'foreground' operation in merge manager.
-        """
 
-        new_page_directory = 'huh'
-
-        return new_page_directory
-    
-    def delete_old_base_pages(self, base_page_paths):
-        
-        pass
-    
     # Helpers ----------------------------
 
 

@@ -32,6 +32,14 @@ class Database():
         self._create_db_storage()
         self._set_uid_gen_path()
 
+        # Load metadata from file to recreate tables if metadata exists
+        metadata_path = os.path.join(self.path, self.metadata_file)
+        if os.path.exists(metadata_path):
+            with open(metadata_path, 'r') as meta_file:
+                metadata: dict = json.load(meta_file)
+            for table_name, table_info in metadata.get("tables", {}).items():
+                self._restore_table(table_name, table_info)
+
     def close(self):
         """
         Closes the database by ensuring all in-memory data is safely flushed to disk.
@@ -44,15 +52,6 @@ class Database():
         self._save_metadata()
         self.tables.clear()
         self.path = None
-
-    def reconstruct_indices(self):
-        """
-        Reconstructs the indices for each table in the database.
-        This function is called after restoring tables to ensure
-        all indices are accurate and up-to-date.
-        """
-        for table in self.tables.values():
-            table.reconstruct_index()
 
     def _save_metadata(self):
         """
@@ -105,14 +104,6 @@ class Database():
         if not os.path.exists(pages_path):
             os.makedirs(pages_path)
 
-        # Load metadata from file to recreate tables if metadata exists
-        metadata_path = os.path.join(self.path, self.metadata_file)
-        if os.path.exists(metadata_path):
-            with open(metadata_path, 'r') as meta_file:
-                metadata: dict = json.load(meta_file)
-            for table_name, table_info in metadata.get("tables", {}).items():
-                self._restore_table(table_name, table_info)
-
     def create_table(self, name, num_columns, key_index, index_config=None):
         """
         # Creates a new table
@@ -121,6 +112,11 @@ class Database():
         :param key: int             #Index of table key in columns
         :param index_config
         """
+        if name in self.tables:
+            print(f"Table '{name}' already exists, skipping creation")
+
+            return self.tables[name]
+                
         if index_config is None:
             index_config = IndexConfig()
 

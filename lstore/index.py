@@ -17,6 +17,7 @@ class Index:
 
     def __init__(self, table, key, num_columns, index_config):
         self.table = table
+        self.key = key
         self.index_config: IndexConfig = index_config
 
         # One index for each table. All our empty initially.
@@ -76,10 +77,15 @@ class Index:
             self.indices[column_number] = None
 
     def insert_val(self, col_number, val, rid, is_prim_key = False):
-        if self.indices[col_number] is not None and (is_prim_key or self.index_config.index_type == BPTreeIndex):
-            self.indices[col_number].insert(val, rid)
-        elif self.indices[col_number] is not None and self.index_config.index_type == DictIndex:
-            self.indices[col_number].insert(rid, val)
+        index = self.indices[col_number]
+
+        # if index is not None and (is_prim_key or isinstance(index, BPTreeIndex)):
+        if index is not None and isinstance(index, BPTreeIndex):
+            index.insert(val, rid)  # B+ Tree
+        elif index is not None and isinstance(index, DictIndex):
+            index.insert(rid, val)  # Dictionary
+        else:
+            raise TypeError(f"Invalid index type: type({type(index)})")
 
 
     # Helper ---------------------
@@ -115,4 +121,4 @@ class Index:
             return
 
         for value, rid in records:
-            self.insert_val(col_number, value, rid)
+            self.insert_val(col_number, value, rid, (col_number == self.key))

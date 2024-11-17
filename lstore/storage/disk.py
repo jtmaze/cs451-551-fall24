@@ -81,7 +81,7 @@ class Disk:
 
         # For each RID page
         for rid_path in rid_filepaths:
-            pages_id = rid_path.split("_")[1]  # Get pages_id from name
+            pages_id = int(rid_path.split("_")[1])  # Get pages_id from name
 
             # Read page from disk
             with open(rid_path, "rb") as file:
@@ -98,6 +98,7 @@ class Disk:
                 for col in real_index_cols:
                     data_path = os.path.join(path, f"base_{pages_id}_{col}.bin")
 
+                    # TODO: cache pages
                     with open(data_path, "rb") as file:
                         bytes = file.read(self.PAGE_SIZE)
                         data_page = Page.from_data(bytes, pages_id)

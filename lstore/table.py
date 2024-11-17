@@ -195,11 +195,6 @@ class Table:
         # Ensure all data is safely written to disk
         self.flush_pages()
 
-        # Clears the mapping of RIDs to pages
-        self.buffer.page_dir.clear()
-        self.buffer.bufferpool.pages = [dict() for _ in range(self.buffer.bufferpool.total_columns)]
-        print("Cleared all in-memory pages from the table.")
-
     def merge(self):
         # self.flush_pages()
 

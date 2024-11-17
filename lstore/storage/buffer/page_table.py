@@ -116,7 +116,8 @@ class PageTable:
         return self.ptable.get(pages_id, None)
 
     def get_page(self, pages_id, col):
-        try:
-            return self.ptable[pages_id][col]
-        except KeyError:
-            return None
+        page_entry = self.ptable.get(pages_id)
+        if page_entry:
+            return page_entry[col]
+            
+        return None
