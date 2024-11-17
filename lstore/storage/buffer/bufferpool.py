@@ -127,11 +127,14 @@ class Bufferpool:
 
         # Schema encoding & data ------
 
-        schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_b, offset_b)
+        # Get record indices for previous tail record
+        pages_id_i, offset_i = indir_rid.get_loc()
 
-        # Get record indices for previous tail record if cumulative updates
-        pages_id_i = indir_rid.pages_id
-        offset_i = indir_rid.pages_offset
+        # Get latest schema encoding (go to latest tail if recently merged)
+        schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_b, offset_b)
+        # If latest tail record previously merged into base record
+        if schema_encoding == -1:  
+            schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_i, offset_i)
 
         # Go through columns while updating schema encoding and data
         metalen = len(MetaCol)
@@ -178,7 +181,11 @@ class Bufferpool:
 
         # If a column has tail records, get record indices for correct version
         schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id, offset)
-        if schema_encoding:
+        
+        # If schema encoding is -1 (ie latest merged into base), else if updated...
+        if schema_encoding == -1 and rel_version == 0:
+            pages_id, offset = rid.get_loc()
+        elif schema_encoding:
             pages_id, offset = self._get_versioned_indices(
                 pages_id, offset, rel_version)
 
