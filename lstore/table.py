@@ -42,7 +42,8 @@ class Table:
         num_columns: int, 
         key: int,
         db_path: str,
-        index_config: IndexConfig
+        index_config: IndexConfig,
+        delete_tracker: list[int] = None
     ):
         if key >= num_columns:
             raise IndexError("Key index is greater than the number of columns")
@@ -67,6 +68,11 @@ class Table:
         self.num_updates = 0
         self.merge_threshold = config.MERGE_UPDATE_THRESHOLD
         self.merge_mgr: MergeManager = MergeManager(self)
+
+        if delete_tracker is None:
+            self.delete_tracker = set()
+        else:
+            self.delete_tracker = set(delete_tracker)
 
     def reconstruct_index(self, index_cols: list[int]):
         """
@@ -197,7 +203,9 @@ class Table:
         """
         try:
             self._validate_primary_key_delete(primary_key)
+
             self.buffer.delete_record(rid)
+            self.delete_tracker.add(primary_key)
         except Table.DuplicateKeyError as e:
             print(e)
 
@@ -235,6 +243,10 @@ class Table:
         primary_key = columns[self.key]
 
         if self.index.locate(self.key, primary_key):
+            if primary_key in self.delete_tracker:
+                self.delete_tracker.discard(primary_key)
+                return
+
             e = f"A record with key {primary_key} already exists, skipping insert."
             raise Table.DuplicateKeyError(e)
 

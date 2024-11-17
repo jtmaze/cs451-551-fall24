@@ -67,6 +67,7 @@ class Database():
                 "num_columns": table.num_columns,
                 "key_index": table.key,
                 "index_cols": index_cols,
+                "delete_tracker": list(table.delete_tracker),
                 # Save additional table settings as needed
             }
 
@@ -83,7 +84,9 @@ class Database():
         key_index = table_info.get("key_index")
         index_config = IndexConfig()  # Customize this if you have saved index details
 
-        table = Table(name, num_columns, key_index, self.path, index_config)
+        delete_tracker = table_info.get("delete_tracker")
+
+        table = Table(name, num_columns, key_index, self.path, index_config, delete_tracker)
         self.tables[name] = table  # Recreate the table in the database
 
         # Reconstruct the index

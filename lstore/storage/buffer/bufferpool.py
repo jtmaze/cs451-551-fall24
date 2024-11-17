@@ -314,7 +314,7 @@ class Bufferpool:
 
     def _validate_not_deleted(self, rid, pages_id, offset):
         if RID(self._read_val(MetaCol.INDIR, pages_id, offset)).tombstone:
-            raise KeyError(f"Record {rid} was deleted")
+            raise KeyError(f"Record {int(rid)} was deleted")
 
     def _fetch_page_from_disk(self, pages_id, col):
         """
