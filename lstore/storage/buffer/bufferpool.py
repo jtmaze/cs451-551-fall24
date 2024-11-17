@@ -33,17 +33,24 @@ class Bufferpool:
 
         self.tcols = self.table.num_total_cols
 
+        # Cache config
+        self.use_lru = config.USE_LRU_NOT_MRU
         self.max_buffer_size = config.MAX_BUFFER_PAGES
+        if self.max_buffer_size is not None:
+            # Ensure the buffer size can at least contain latest base & tail pages
+            self.max_buffer_size = max(self.tcols * 4, self.max_buffer_size)
 
         # Global page table for LRU/MRU eviction
         self.page_table = PageTable(self.tcols)  # Maps page_id -> list of page objects per column
         
-        # Pointers to pages in page_table (used as ordered sets)
+        # Pointers to pages in page_table (only as ordered sets)
+        # Allows tracking base/tails in memory and and getting latest for writing
+        # TODO: just use sets and single values for latest
         self.base_trackers = OrderedDict()
         self.tail_trackers = OrderedDict()
 
-        # Maps page id to (tracker, col idx) for evictions
-        self.reverse_tracker = dict()
+        # Saves page id and col as tuple in key for eviction
+        self.evict_queue = OrderedDict()
 
         self._new_vals_buffer = [None for _ in range(self.tcols)]
 
@@ -214,71 +221,35 @@ class Bufferpool:
     def flush_to_disk(self):
         """Flushes all pages in bufferpool's page table to the disk."""
         for pages_id in self.page_table:
-            for i in range(self.tcols):
-                self._flush_page_to_disk(pages_id, i)
+            for col in range(self.tcols):
+                page = self.page_table.get_page(pages_id, col)
+                self._flush_page_to_disk(page, pages_id, col)
 
     # Helpers ------------------------
-
-    def _flush_page_to_disk(self, pages_id, col):
-        """Currently writes page to disk."""
-        page: Page | None = self.page_table.get_page(pages_id, col)
-
-        if page is not None and page.is_dirty:
-            self.table.disk.add_page(page, pages_id, col)
-
-            if config.DEBUG_PRINT:
-                print(f"Flushed page {pages_id} in column {col} to disk.")
-
-    def _evict_page(self):
-        raise NotImplementedError()
-        # Search for most recently used UNPINNED page to evict from cache
-        for pages_id in reversed(self.page_table):
-            page = self.page_table[pages_id]
-
-            if page.pin_count <= 0:
-                del self.page_table[pages_id]
-
-                # Delete page from tracker
-                if pages_id in self.reverse_tracker:
-                    tracker, col = self.reverse_tracker.pop(pages_id)
-                    del tracker[col][pages_id]
-
-                # Cleanup
-                self.page_count -= 1
-                if page.is_dirty:
-                    self._flush_page_to_disk(page)
-
-                return
-
-        raise RuntimeWarning("Tried to evict a page, but no unpinned pages available!")
 
     def _get_pages(self, is_base):
         page_tracker = self.base_trackers if is_base else self.tail_trackers
 
         if page_tracker:
             pages_id = next(reversed(page_tracker))
-            pages: PageTableEntry = self.page_table.get_pages(pages_id)
+            pages: PageTableEntry = self.page_table.get_page_entry(pages_id)
         else:
             pages = None
-
-        # TODO: Fetch from disk?
 
         # Create new pages if necessary
         if pages is None or not pages.has_capacity():
             pages, pages_id = self.page_table.create_pages(is_base)
 
-            if self.max_buffer_size and self.page_table.size > self.max_buffer_size:
-                self._evict_page()
+            # Update for eviction
+            if self.max_buffer_size:
+                for col in range(self.tcols):
+                    self.evict_queue[(pages_id, col)] = None
+                    self._evict_pages()
 
             page_tracker[pages_id] = None  # Value doesn't matter, used as ordered set
 
-            # self.reverse_tracker[page.id] = (page_tracker, col)
-
-        # Move to end for cache eviction
-        self.page_table.move_to_end(pages_id, last=True)
-
         return pages
-
+    
     def _overwrite_val(self, col:int, rid: RID, val: int):
         """
         Overwrites a value in a page, marking it as dirty.
@@ -286,13 +257,19 @@ class Bufferpool:
         pages_id, offset = rid.get_loc()
 
         page = self.page_table.get_page(pages_id, col)
+
         if page is None:
             page = self._fetch_page_from_disk(pages_id, col)
 
+            if self.max_buffer_size:
+                self.evict_queue[(pages_id, col)] = None
+                self._evict_pages()
+        elif self.max_buffer_size:
+            self.evict_queue.move_to_end((pages_id, col), last=self.use_lru)
+            self._evict_pages()
+
         page.update(val, offset)
         page.is_dirty = True
-
-        self.page_table.move_to_end(pages_id, last=True)
 
     def _read_val(self, col: int, pages_id: int, offset: int):
         """
@@ -300,10 +277,16 @@ class Bufferpool:
         and a page id/offset.
         """
         page = self.page_table.get_page(pages_id, col)
+
         if page is None:
             page = self._fetch_page_from_disk(pages_id, col)
 
-        self.page_table.move_to_end(pages_id, last=True)
+            if self.max_buffer_size:
+                self.evict_queue[(pages_id, col)] = None
+                self._evict_pages()
+        elif self.max_buffer_size:
+            self.evict_queue.move_to_end((pages_id, col), last=self.use_lru)
+            self._evict_pages()
 
         return page.read(offset)
 
@@ -340,21 +323,34 @@ class Bufferpool:
         page = disk.get_page(pages_id, col)
         
         # Populate page table entry
-        pages: PageTableEntry = self.page_table.get_pages(pages_id)
+        pages: PageTableEntry = self.page_table.get_page_entry(pages_id)
         if pages is None:
             pages = self.page_table.init_pages(pages_id, page.offset)
-        pages[col] = page
-
-        self.page_table.move_to_end(pages_id, last=True)
+        pages.add_page(page, col)
 
         return page
+    
+    def _evict_pages(self):
+        if self.max_buffer_size:
+            while len(self.evict_queue) > self.max_buffer_size:
+                self._evict_latest_page()
 
-    def load_base_pages(self):
-        """
-        Ensures all base pages are loaded into the buffer pool.
-        """
-        for pages_id, page_entry in self.page_table:
-            if page_entry.data[0].is_base:  # Load only base pages
-                for col in range(self.tcols):
-                    if page_entry[col] is None:
-                        self._fetch_page_from_disk(pages_id, col)
+    def _evict_latest_page(self):
+        pages_id, col = self.evict_queue.popitem(last=False)[0]
+
+        page = self.page_table.get_page(pages_id, col)
+
+        if page.pin_count <= 0:
+            is_entry_empty = self.page_table.remove_page(pages_id, col)
+
+            if is_entry_empty:
+                tracker = self.tail_trackers if pages_id % 2 else self.base_trackers
+                tracker.pop(pages_id, None)
+
+            # Write to disk (will check if dirty)
+            self._flush_page_to_disk(page, pages_id, col)
+
+    def _flush_page_to_disk(self, page, pages_id, col):
+        """Currently writes page to disk."""
+        if page is not None and page.is_dirty:
+            self.table.disk.add_page(page, pages_id, col)

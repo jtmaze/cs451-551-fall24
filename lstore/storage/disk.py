@@ -53,7 +53,8 @@ class Disk:
         with open(page_path, "wb") as file:
             file.write(page.data)
 
-        print(f"Page with RID {pages_id} written to disk at {page_path}.")
+        if config.DEBUG_PRINT:
+            print(f"Page {pages_id} written to {page_path}")
 
     def write_all_pages(self, pages):
         """
