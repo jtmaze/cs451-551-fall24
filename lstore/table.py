@@ -30,7 +30,11 @@ class Table:
     :param key:          # Index of table key in columns (ie primary key, ex 2 if 3rd col)
     """
     class DuplicateKeyError(Exception):
-        """Custom exception for duplicate keys."""
+        """Custom exception for duplicate primary keys."""
+        pass
+
+    class MissingKeyError(Exception):
+        """Custom exception for missing primary keys."""
         pass
 
     def __init__(self, 
@@ -97,7 +101,7 @@ class Table:
         """
         try:
             # Check if primary key exists (raises error if not)
-            self._validate_primary_key(columns)
+            self._validate_primary_key_insert(columns)
 
             # Insert a record, buffer will return its new RID
             rid = self.buffer.insert_record(columns)
@@ -166,7 +170,7 @@ class Table:
 
         return records
 
-    def update(self, rid: RID, columns: tuple[int]):
+    def update(self, rid: RID, columns: tuple[int], primary_key):
         """
         Updates the record with the given RID. This updates the base record's
         schema encoding and indirection pointer to point to the latest tail
@@ -175,19 +179,27 @@ class Table:
         :param rid: RID of base record to update
         :param columns: New data values
         """
-        self.buffer.update_record(rid, columns)
+        try:
+            self._validate_primary_key_update(primary_key)
+            self.buffer.update_record(rid, columns)
 
-        self.num_updates += 1
-        if self.num_updates >= self.merge_threshold:
-            self.merge()
+            self.num_updates += 1
+            if self.num_updates >= self.merge_threshold:
+                self.merge()
+        except Table.DuplicateKeyError as e:
+            print(e)
 
-    def delete(self, rid: RID):
+    def delete(self, rid: RID, primary_key):
         """
         Deletes the record with the given RID by marking it invalid
 
         :param rid: RID of record to 'delete'
         """
-        self.buffer.delete_record(rid)
+        try:
+            self._validate_primary_key_delete(primary_key)
+            self.buffer.delete_record(rid)
+        except Table.DuplicateKeyError as e:
+            print(e)
 
     # Utility ----------------------
 
@@ -219,9 +231,20 @@ class Table:
 
     # Helpers ------------------------------------------------
 
-    def _validate_primary_key(self, columns):
+    def _validate_primary_key_insert(self, columns):
         primary_key = columns[self.key]
 
         if self.index.locate(self.key, primary_key):
             e = f"A record with key {primary_key} already exists, skipping insert."
             raise Table.DuplicateKeyError(e)
+
+    def _validate_primary_key_update(self, primary_key):
+        if not self.index.locate(self.key, primary_key):
+            e = f"No record with key {primary_key} exists, skipping update."
+            raise Table.MissingKeyError(e)
+
+    def _validate_primary_key_delete(self, primary_key):
+        if not self.index.locate(self.key, primary_key):
+            e = f"No record with key {primary_key} exists, skipping delete."
+            raise Table.MissingKeyError(e)
+        

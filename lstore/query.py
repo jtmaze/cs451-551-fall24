@@ -31,7 +31,7 @@ class Query:
                 return False  # Record not found
 
             rid = rid_list[0]
-            self.table.delete(rid)
+            self.table.delete(rid, primary_key)
             return True
         except Exception as e:
             self._print_error(e)
@@ -99,7 +99,7 @@ class Query:
                 return False  # Record not found
 
             rid = rid_list[0]
-            self.table.update(rid, columns)
+            self.table.update(rid, columns, primary_key)
             return True
         except Exception as e:
             self._print_error(e)

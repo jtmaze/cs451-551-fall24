@@ -223,6 +223,7 @@ class Bufferpool:
         for pages_id in self.page_table:
             for col in range(self.tcols):
                 page = self.page_table.get_page(pages_id, col)
+
                 self._flush_page_to_disk(page, pages_id, col)
 
     # Helpers ------------------------
