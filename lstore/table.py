@@ -103,8 +103,9 @@ class Table:
             rid = self.buffer.insert_record(columns)
 
             # Update indexes
-            for i in range(self.num_columns):
-                self.index.insert_val(i, columns[i], rid, is_prim_key = (i == self.key))
+            for col in self.index.index_cols:
+                self.index.insert_val(
+                    col, columns[col], rid, is_prim_key=(col == self.key))
         except Table.DuplicateKeyError as e:
             print(e)
         except Exception as e:

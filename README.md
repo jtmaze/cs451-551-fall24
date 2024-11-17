@@ -48,7 +48,21 @@ merge is functional.
 
 ## Indexing
 
-(secondary indexes)
+Secondary indexes are created on all non-primary key columns by default.
+
+While this supports querying on all columns, this may not be desirable for
+performance. If you would like to specify the columns you need an index for,
+you can create an IndexConfig object and pass it to db.create_table as below.
+
+A index will be made on the primary key regardless of whether it is specified.
+
+```
+from lstore.index_types.index_config import IndexConfig
+
+config = IndexConfig(index_columns=[0, 3])
+
+grades_table = db.create_table('Grades', 5, 0, config)
+```
 
 ---
 
