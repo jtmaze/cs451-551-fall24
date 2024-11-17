@@ -29,6 +29,9 @@ class Table:
     :param num_columns:  # Number of DATA columns (all columns are integer)
     :param key:          # Index of table key in columns (ie primary key, ex 2 if 3rd col)
     """
+    class DuplicateKeyError(Exception):
+        """Custom exception for duplicate keys."""
+        pass
 
     def __init__(self, 
         name: str,
@@ -93,15 +96,20 @@ class Table:
         :param columns: New data values
         """
         try:
+            # Check if primary key exists (raises error if not)
+            self._validate_primary_key(columns)
+
             # Insert a record, buffer will return its new RID
             rid = self.buffer.insert_record(columns)
+
+            # Update indexes
+            for i in range(self.num_columns):
+                self.index.insert_val(i, columns[i], rid, is_prim_key = (i == self.key))
+        except Table.DuplicateKeyError as e:
+            print(e)
         except Exception as e:
             print(f"Error inserting record '{columns}'")
             raise  # Re-raise exception error
-
-        # Update primary key's index
-        for i in range(0, self.num_columns):
-            self.index.insert_val(i, columns[i], rid, is_prim_key = (i == self.key))
 
     def select(
         self,
@@ -198,6 +206,8 @@ class Table:
     def merge(self):
         # self.flush_pages()
 
+        print("Running merge...")
+
         with concurrent.futures.ThreadPoolExecutor() as executor:
             merge_future = executor.submit(self.merge_mgr.merge)
         
@@ -206,9 +216,11 @@ class Table:
 
         self.num_updates = 0
 
-    def __del__(self):
-        """
-        Table destructor. Writes pages only in memory to disk.
-        """
-        # TODO: Write buffer pages to disk
-        pass
+    # Helpers ------------------------------------------------
+
+    def _validate_primary_key(self, columns):
+        primary_key = columns[self.key]
+
+        if self.index.locate(self.key, primary_key):
+            e = f"A record with key {primary_key} already exists, skipping insert."
+            raise Table.DuplicateKeyError(e)

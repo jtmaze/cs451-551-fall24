@@ -95,7 +95,8 @@ class BPTree:
             new_node.parent_node = new_root
             self.root = new_root
             if config.DEBUG_PRINT:
-                print(f'New root created on {new_root.keys}')
+                pass
+                #print(f'New root created on {new_root.keys}')
 
         else:
             self.insert_at_parent(node_to_split.parent_node, sepperator, new_node)

@@ -71,7 +71,8 @@ class BPTreeNode:
                     return
                 
             if config.DEBUG_PRINT:
-                print(f'Key {key_delete} not found')
+                pass
+                #print(f'Key {key_delete} not found')
         
 
     def point_query_node(self, search_key):
@@ -87,7 +88,8 @@ class BPTreeNode:
                     return current_vals[i]
                 
             if config.DEBUG_PRINT:
-                print(f'Key:{search_key} not found in leaf node')
+                pass
+                #print(f'Key:{search_key} not found in leaf node')
                 
             return None
         
