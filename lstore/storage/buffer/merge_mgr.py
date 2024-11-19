@@ -2,9 +2,9 @@
 Steps to the Merge Algorithm as we're implementing it:
 1. Get a batch of base pages could be from disk or buffer (buffer is probably faster)
 2. Get corresponding tail pages for the base RIDs. 
-3. Consolidate base records with update tail records
-4. Update the page directory with the new base records
-5. De-allocate the outdated base pages
+3. Consolidate base records with updated tail records
+4. Put updated pages on disk in temp folder
+5. Swap out the disk's old base pages with new base pages
 
 # Stupid/simple questions:
 - How do we set up a "background thread" to run the merge manager?
@@ -17,14 +17,12 @@ Steps to the Merge Algorithm as we're implementing it:
     - Easiest approach seems coarser-grained and less frequent merges?
     - Is this a question of how many committed tail records we fetch in each batch??
 
-- When loading corresponding base pages, use the get_page method from disk.py, or go from buffer pool??
-
-
 """
 from collections import namedtuple
 from collections import defaultdict
 
 import os
+import shutil
 import time # For how often we shold merge. 
 
 from lstore import config
@@ -73,14 +71,23 @@ class MergeManager:
             base_data: list[tuple[int]] = self._find_base_records(batch_ids)
             updated_tails = self._find_latest_tail_records(base_data)
 
-            # Merge the records
-            # new_base_records = self.merge_records(base_data, updated_tails)
+            # Merge the records (overwrites values in base data)
+            self._merge_records(base_data, updated_tails)
 
-            # Update the page directory / Write the new pages.
-            # new_base_records.update_page_directory()
+            # Write all updated base pages as temp files
+            self._write_temp_to_disk(base_data)
 
-            # Deallocate the base old pages
-            # self.delete_old_base_pages(base_page_paths)
+    def finalize_merge(self, merge_future):
+        page_path = os.path.join(self.table.db_path, "pages/")
+        temp_path = os.path.join(page_path, "temp")
+
+        for filename in os.listdir(temp_path):
+            source = os.path.join(temp_path, filename)
+            dest = os.path.join(page_path, filename)
+
+            shutil.move(source, dest)
+
+    # Helpers ------------------
 
     def _get_base_page_ids(self):
         """
@@ -104,7 +111,7 @@ class MergeManager:
 
         return paths
 
-    def _find_base_records(self, page_ids: list[int]) -> list[tuple[int]]:
+    def _find_base_records(self, page_ids: list[int]) -> list[list[int]]:
         """
         Inputs: A list of paths to all the base pages in the batch/subset 
         Returns: A list of tuples with all of the base records. 
@@ -132,13 +139,13 @@ class MergeManager:
             for rid in rids:
                 _, offset = rid.get_loc()
 
-                base_tuple = tuple(page.read(offset) for page in pages)
+                base_tuple = [page.read(offset) for page in pages]
 
                 base_data.append(base_tuple)
 
         return base_data
 
-    def _find_latest_tail_records(self, base_data: list[tuple[int]]) -> dict[RID, Record]:
+    def _find_latest_tail_records(self, base_data: list[list[int]]) -> dict[RID, list[int]]:
         """
         Inputs: A list of base records (as tuples?)
         Returns: The most up-to-date tail record (on disk) for each base record's RID
@@ -180,54 +187,56 @@ class MergeManager:
 
         return tail_data
         
-    # def merge_records(self, base_records: list[tuple[int]], updated_tails: dict[RID, tuple[int]]) -> dict:
-    #     """
-    #     Conceuptually, a left-outer join
-    #     Inputs: Original base data (list of tuples) and most up-to-date tail records (dict)
-    #     Returns: ?Dictionary? with the updated base records.
-    #     """
-    #     tcols = self.tcols
+    def _merge_records(self, base_records: list[tuple[int]], updated_tails: dict[RID, tuple[int]]) -> dict:
+        """
+        Conceuptually, a left-outer join
+        Inputs: Original base data (list of tuples) and most up-to-date tail records (dict)
+        Returns: ?Dictionary? with the updated base records.
+        """
+        meta_len = len(MetaCol)
 
-    #     # base_data =
-    #     new_base_records = base_records.copy()
-
-<<<<<<< Updated upstream
-    #     for base_record in base_records:
-
-    #         base_rid_value = base_record[MetaCol.RID]
-    #         updated_record = list(base_record)
-
-    #         for col_idx in range(, tcols):
-    #             )            
-
-    #     return new_base_records
-=======
+        for base_record in base_records:
             base_rid = base_record[MetaCol.RID]
-            
+
             if base_rid in updated_tails:
-                # Merge record should be identical to the corresponding updated tail
-                merge_record = updated_tails[base_rid] 
-                new_base_records.append(merge_record)
-            else:
-                new_base_records.append(base_record)
+                base_record[meta_len:] = updated_tails[base_rid][meta_len:]
 
-        return new_base_records
->>>>>>> Stashed changes
+                base_record[MetaCol.SCHEMA] = -1
 
-    def update_page_directory(self):
-        """
+    def _write_temp_to_disk(self, data):
+        tcols = self.tcols
         
-        This is the only 'foreground' operation in merge manager.
-        """
+        cache_table = defaultdict(lambda: [None for _ in range(tcols)])
 
-        new_page_directory = 'huh'
+        # Create new pages
+        for data_tuple in data:
+            rid = RID(data_tuple[MetaCol.RID])
+            page_id, offset = rid.get_loc()
 
-        return new_page_directory
-    
-    def delete_old_base_pages(self, base_page_paths):
-        
-        pass
-    
+            for col in range(tcols):
+                # Attempt to get page from cache. If not in, grab from disk
+                page = cache_table[page_id][col] if page_id in cache_table else None
+                if page is None:
+                    page = Page(page_id)
+                    cache_table[page_id][col] = page
+
+                page.update(data_tuple[col], offset)
+                page._increment_offset()  # 9 out of 10 dentists agree
+
+        temp_filepath = os.path.join(self.table.db_path, "pages/temp")
+        os.makedirs(temp_filepath, exist_ok=True)
+
+        # Save new pages as temp files
+        for page_id, pages in cache_table.items():
+            for col in range(tcols):
+                page = pages[col]
+
+                path = os.path.join(temp_filepath, f"base_{page_id}_{col}.bin")
+
+                with open(path, "wb") as file:
+                    file.write(page.data)
+
+
     # Helpers ----------------------------
 
 

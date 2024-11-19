@@ -6,7 +6,7 @@ buffer and indices for performant querying.
 
 from typing import Literal
 
-import concurrent.futures # For running merge in background
+import concurrent.futures
 
 from lstore.index import Index
 from lstore.storage.buffer.buffer import Buffer
@@ -29,13 +29,21 @@ class Table:
     :param num_columns:  # Number of DATA columns (all columns are integer)
     :param key:          # Index of table key in columns (ie primary key, ex 2 if 3rd col)
     """
+    class DuplicateKeyError(Exception):
+        """Custom exception for duplicate primary keys."""
+        pass
+
+    class MissingKeyError(Exception):
+        """Custom exception for missing primary keys."""
+        pass
 
     def __init__(self, 
         name: str,
         num_columns: int, 
         key: int,
         db_path: str,
-        index_config: IndexConfig
+        index_config: IndexConfig,
+        delete_tracker: list[int] = None
     ):
         if key >= num_columns:
             raise IndexError("Key index is greater than the number of columns")
@@ -60,6 +68,11 @@ class Table:
         self.num_updates = 0
         self.merge_threshold = config.MERGE_UPDATE_THRESHOLD
         self.merge_mgr: MergeManager = MergeManager(self)
+
+        if delete_tracker is None:
+            self.delete_tracker = set()
+        else:
+            self.delete_tracker = set(delete_tracker)
 
     def reconstruct_index(self, index_cols: list[int]):
         """
@@ -93,18 +106,21 @@ class Table:
         :param columns: New data values
         """
         try:
+            # Check if primary key exists (raises error if not)
+            self._validate_primary_key_insert(columns)
+
             # Insert a record, buffer will return its new RID
             rid = self.buffer.insert_record(columns)
+
+            # Update indexes
+            for col in self.index.index_cols:
+                self.index.insert_val(
+                    col, columns[col], rid, is_prim_key=(col == self.key))
+        except Table.DuplicateKeyError as e:
+            print(e)
         except Exception as e:
             print(f"Error inserting record '{columns}'")
             raise  # Re-raise exception error
-
-        # Update primary key's index
-        for i in range(0, self.num_columns):
-            self.index.insert_val(i, columns[i], rid, is_prim_key = (i == self.key))
-
-        # TODO: Update other indices
-        pass
 
     def select(
         self,
@@ -156,11 +172,11 @@ class Table:
                     self.buffer.get_record(rid, proj_col_idx, rel_version)
                 )
             except Exception as e:
-                print(f"Failed to find rid={rid}")
+                print(f"Failed to find rid={rid.rid}")
 
         return records
 
-    def update(self, rid: RID, columns: tuple[int]):
+    def update(self, rid: RID, columns: tuple[int], primary_key):
         """
         Updates the record with the given RID. This updates the base record's
         schema encoding and indirection pointer to point to the latest tail
@@ -169,19 +185,29 @@ class Table:
         :param rid: RID of base record to update
         :param columns: New data values
         """
-        self.buffer.update_record(rid, columns)
+        try:
+            self._validate_primary_key_update(primary_key)
+            self.buffer.update_record(rid, columns)
 
-        self.num_updates += 1
-        if self.num_updates >= self.merge_threshold:
-            self.merge()
+            self.num_updates += 1
+            if self.num_updates >= self.merge_threshold:
+                self.merge()
+        except Table.DuplicateKeyError as e:
+            print(e)
 
-    def delete(self, rid: RID):
+    def delete(self, rid: RID, primary_key):
         """
         Deletes the record with the given RID by marking it invalid
 
         :param rid: RID of record to 'delete'
         """
-        self.buffer.delete_record(rid)
+        try:
+            self._validate_primary_key_delete(primary_key)
+
+            self.buffer.delete_record(rid)
+            self.delete_tracker.add(primary_key)
+        except Table.DuplicateKeyError as e:
+            print(e)
 
     # Utility ----------------------
 
@@ -198,24 +224,39 @@ class Table:
         # Ensure all data is safely written to disk
         self.flush_pages()
 
-        # Clears the mapping of RIDs to pages
-        self.buffer.page_dir.clear()
-        self.buffer.bufferpool.pages = [dict() for _ in range(self.buffer.bufferpool.total_columns)]
-        print("Cleared all in-memory pages from the table.")
-
     def merge(self):
-        # Create background process to merge
-        #with concurrent.futures.ProcessPoolExecutor() as executor:
-
         # self.flush_pages()
 
-        self.merge_mgr.merge()
+        print("Running merge...")
+
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            merge_future = executor.submit(self.merge_mgr.merge)
+        
+            merge_future.add_done_callback(
+                self.merge_mgr.finalize_merge)        
 
         self.num_updates = 0
 
-    def __del__(self):
-        """
-        Table destructor. Writes pages only in memory to disk.
-        """
-        # TODO: Write buffer pages to disk
-        pass
+    # Helpers ------------------------------------------------
+
+    def _validate_primary_key_insert(self, columns):
+        primary_key = columns[self.key]
+
+        if self.index.locate(self.key, primary_key):
+            if primary_key in self.delete_tracker:
+                self.delete_tracker.discard(primary_key)
+                return
+
+            e = f"A record with key {primary_key} already exists, skipping insert."
+            raise Table.DuplicateKeyError(e)
+
+    def _validate_primary_key_update(self, primary_key):
+        if not self.index.locate(self.key, primary_key):
+            e = f"No record with key {primary_key} exists, skipping update."
+            raise Table.MissingKeyError(e)
+
+    def _validate_primary_key_delete(self, primary_key):
+        if not self.index.locate(self.key, primary_key):
+            e = f"No record with key {primary_key} exists, skipping delete."
+            raise Table.MissingKeyError(e)
+        

@@ -15,7 +15,8 @@ class Database():
         self.tables = dict()
         self.path = "./CS451"
 
-        self._set_uid_gen_path(self.path)
+        self._create_db_storage()
+        self._set_uid_gen_path()
 
     # Not required for milestone1
     def open(self, path):
@@ -27,13 +28,9 @@ class Database():
         """
         self.path = path
 
-        # Create directory for database files if it doesn't exist
-        if not os.path.exists(self.path):
-            os.makedirs(self.path)
-
-        pages_path = os.path.join(self.path, "pages")
-        if not os.path.exists(pages_path):
-            os.makedirs(pages_path)
+        # If DNE, create storage folder and overwrite path for UID gen
+        self._create_db_storage()
+        self._set_uid_gen_path()
 
         # Load metadata from file to recreate tables if metadata exists
         metadata_path = os.path.join(self.path, self.metadata_file)
@@ -42,9 +39,6 @@ class Database():
                 metadata: dict = json.load(meta_file)
             for table_name, table_info in metadata.get("tables", {}).items():
                 self._restore_table(table_name, table_info)
-
-        # Overwrite database path for UID generators
-        self._set_uid_gen_path(path)
 
     def close(self):
         """
@@ -58,15 +52,6 @@ class Database():
         self._save_metadata()
         self.tables.clear()
         self.path = None
-
-    def reconstruct_indices(self):
-        """
-        Reconstructs the indices for each table in the database.
-        This function is called after restoring tables to ensure
-        all indices are accurate and up-to-date.
-        """
-        for table in self.tables.values():
-            table.reconstruct_index()
 
     def _save_metadata(self):
         """
@@ -82,6 +67,7 @@ class Database():
                 "num_columns": table.num_columns,
                 "key_index": table.key,
                 "index_cols": index_cols,
+                "delete_tracker": list(table.delete_tracker),
                 # Save additional table settings as needed
             }
 
@@ -98,7 +84,9 @@ class Database():
         key_index = table_info.get("key_index")
         index_config = IndexConfig()  # Customize this if you have saved index details
 
-        table = Table(name, num_columns, key_index, self.path, index_config)
+        delete_tracker = table_info.get("delete_tracker")
+
+        table = Table(name, num_columns, key_index, self.path, index_config, delete_tracker)
         self.tables[name] = table  # Recreate the table in the database
 
         # Reconstruct the index
@@ -106,9 +94,18 @@ class Database():
 
         print(f"Restored and indexed table '{name}' with {num_columns} columns.")
 
-    def _set_uid_gen_path(self, path):
-        RID.initialize_uid_gen(path)
-        PageTable.initialize_uid_gen(path)
+    def _set_uid_gen_path(self):
+        RID.initialize_uid_gen(self.path)
+        PageTable.initialize_uid_gen(self.path)
+
+    def _create_db_storage(self):
+        # Create directory for database files if it doesn't exist
+        if not os.path.exists(self.path):
+            os.makedirs(self.path)
+
+        pages_path = os.path.join(self.path, "pages")
+        if not os.path.exists(pages_path):
+            os.makedirs(pages_path)
 
     def create_table(self, name, num_columns, key_index, index_config=None):
         """
@@ -118,6 +115,11 @@ class Database():
         :param key: int             #Index of table key in columns
         :param index_config
         """
+        if name in self.tables:
+            print(f"Table '{name}' already exists, skipping creation")
+
+            return self.tables[name]
+                
         if index_config is None:
             index_config = IndexConfig()
 
