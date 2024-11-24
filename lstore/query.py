@@ -161,12 +161,12 @@ class Query:
             )
 
             if not records:
-                return False
+                return []
 
             return records
         except Exception as e:
             self._print_error(e)
-            return False
+            return []
         
     def _select_core_range(self, start_range, end_range, search_key_index, projected_columns_index, relative_version=0):
         try: 
