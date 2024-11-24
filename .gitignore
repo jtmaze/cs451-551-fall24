@@ -173,7 +173,12 @@ tags
 
 # ------------------------------------------------------
 
+# DB persistence
 CS451/*
+CT/*
+M2/*
+MT/*
+
 db_storage/*
 
 tester_output/
