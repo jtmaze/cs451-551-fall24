@@ -6,6 +6,7 @@ offsets.
 
 from typing import Literal
 
+import threading
 from collections import OrderedDict  # MRU cache
 
 from lstore.storage.record import Record
@@ -18,7 +19,6 @@ from lstore import config
 
 from lstore.page import Page
 from lstore.storage.disk import Disk
-
 
 class Bufferpool:
     """
@@ -45,12 +45,14 @@ class Bufferpool:
         
         # Pointers to pages in page_table (only as ordered sets)
         # Allows tracking base/tails in memory and and getting latest for writing
-        # TODO: just use sets and single values for latest
         self.base_trackers = OrderedDict()
         self.tail_trackers = OrderedDict()
 
         # Saves page id and col as tuple in key for eviction
         self.evict_queue = OrderedDict()
+        
+        self.evict_lock = threading.Lock()
+        self.disk_lock = threading.Lock()
 
         self._new_vals_buffer = [None for _ in range(self.tcols)]
 
@@ -84,12 +86,14 @@ class Bufferpool:
         new_vals[MetaCol.RID] = int(rid)
         new_vals[MetaCol.SCHEMA] = 0
         new_vals[len(MetaCol):self.tcols] = columns # All data columns
-        pages_b.write_vals(new_vals)
+        with pages_b:
+            pages_b.write_vals(new_vals)
 
         # Write first tail record (copy of base record)
         new_vals[MetaCol.INDIR] = 0
         new_vals[MetaCol.RID] = int(tail_rid)
-        pages_t.write_vals(new_vals)
+        with pages_t:
+            pages_t.write_vals(new_vals)
 
         # Return new base rid for index
         return rid
@@ -111,57 +115,58 @@ class Bufferpool:
 
         self._validate_not_deleted(rid, pages_id_b, offset_b)
 
-        # Create new RID
         pages: PageTableEntry = self._get_pages(False)
-        pages_id_t, offset_t = pages.get_loc()
-        tail_rid: RID = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=tombstone)
+        with pages:
+            # Create new RID
+            pages_id_t, offset_t = pages.get_loc()
+            tail_rid: RID = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=tombstone)
 
-        # Cache for performance
-        _read_val_cached = self._read_val
+            # Cache for performance
+            _read_val_cached = self._read_val
 
-        new_vals = self._new_vals_buffer
+            new_vals = self._new_vals_buffer
 
-        # Indirection -----------------
+            # Indirection -----------------
 
-        # Set new tail indir to prev tail rid and base indir to new rid
-        indir_rid = RID(_read_val_cached(MetaCol.INDIR, pages_id_b, offset_b))
-        new_vals[MetaCol.INDIR] = int(indir_rid)
-        self._overwrite_val(MetaCol.INDIR, rid, tail_rid)
+            # Set new tail indir to prev tail rid and base indir to new rid
+            indir_rid = RID(_read_val_cached(MetaCol.INDIR, pages_id_b, offset_b))
+            new_vals[MetaCol.INDIR] = int(indir_rid)
+            self._overwrite_val(MetaCol.INDIR, rid, tail_rid)
 
-        # RID ----------- -------------
+            # RID ----------- -------------
 
-        new_vals[MetaCol.RID] = int(tail_rid)
+            new_vals[MetaCol.RID] = int(tail_rid)
 
-        # Schema encoding & data ------
+            # Schema encoding & data ------
 
-        # Get record indices for previous tail record
-        pages_id_i, offset_i = indir_rid.get_loc()
+            # Get record indices for previous tail record
+            pages_id_i, offset_i = indir_rid.get_loc()
 
-        # Get latest schema encoding (go to latest tail if recently merged)
-        schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_b, offset_b)
-        # If latest tail record previously merged into base record
-        if schema_encoding == -1:  
-            schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_i, offset_i)
+            # Get latest schema encoding (go to latest tail if recently merged)
+            schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_b, offset_b)
+            # If latest tail record previously merged into base record
+            if schema_encoding == -1:  
+                schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_i, offset_i)
 
-        # Go through columns while updating schema encoding and data
-        metalen = len(MetaCol)
-        for data_col, val in enumerate(columns):
-            real_col = metalen + data_col
+            # Go through columns while updating schema encoding and data
+            metalen = len(MetaCol)
+            for data_col, val in enumerate(columns):
+                real_col = metalen + data_col
 
-            if val is None:
-                # Get previous value if cumulative
-                val = _read_val_cached(real_col, pages_id_i, offset_i)
-            else:
-                # Update schema by setting appropriate bit to 1
-                schema_encoding |= (1 << data_col)
+                if val is None:
+                    # Get previous value if cumulative
+                    val = _read_val_cached(real_col, pages_id_i, offset_i)
+                else:
+                    # Update schema by setting appropriate bit to 1
+                    schema_encoding |= (1 << data_col)
 
-            new_vals[real_col] = val
+                new_vals[real_col] = val
 
-        # Write both base and new tail record schema encoding
-        new_vals[MetaCol.SCHEMA] = schema_encoding
-        self._overwrite_val(MetaCol.SCHEMA, rid, schema_encoding)
+            # Write both base and new tail record schema encoding
+            new_vals[MetaCol.SCHEMA] = schema_encoding
+            self._overwrite_val(MetaCol.SCHEMA, rid, schema_encoding)
 
-        pages.write_vals(new_vals)
+            pages.write_vals(new_vals)
 
     def read(
             self,
@@ -206,25 +211,13 @@ class Bufferpool:
 
         return Record(self.table.key, columns, rid)
 
-    def pin_page(self, page_id):
-        """Increment the pin count for a specific page to prevent eviction."""
-        page = self.page_table.get(page_id)
-        if page:
-            page.pin_count += 1
-
-    def unpin_page(self, page_id):
-        """Decrement the pin count for a specific page, allowing for eviction."""
-        page = self.page_table.get(page_id)
-        if page:
-            page.pin_count = max(0, page.pin_count - 1)
-
     def flush_to_disk(self):
         """Flushes all pages in bufferpool's page table to the disk."""
         for pages_id in self.page_table:
-            for col in range(self.tcols):
-                page = self.page_table.get_page(pages_id, col)
-
-                self._flush_page_to_disk(page, pages_id, col)
+            pages = self.page_table.get_page_entry(pages_id)
+            with pages:
+                for col in range(self.tcols):
+                    self._flush_page_to_disk(pages[col], pages_id, col)
 
     # Helpers ------------------------
 
@@ -260,21 +253,25 @@ class Bufferpool:
         """
         pages_id, offset = rid.get_loc()
 
-        page = self.page_table.get_page(pages_id, col)
-        self._validate_read_page(page, pages_id, col)
+        pages = self.page_table.get_page_entry(pages_id)
+        with pages:
+            page = pages[col]
+            self._validate_read_page(page, pages_id, col)
 
-        page.update(val, offset)
-        page.is_dirty = True
+            page.update(val, offset)
+            page.is_dirty = True
 
     def _read_val(self, col: int, pages_id: int, offset: int):
         """
         Reads a value from a page given a column (including metadata cols)
         and a page id/offset.
         """
-        page = self.page_table.get_page(pages_id, col)
-        page = self._validate_read_page(page, pages_id, col)
+        pages = self.page_table.get_page_entry(pages_id)
+        with pages:
+            page = pages[col]
+            page = self._validate_read_page(page, pages_id, col)
 
-        return page.read(offset)
+            return page.read(offset)
     
     def _validate_read_page(self, page, pages_id, col):
         if page is None:
@@ -339,19 +336,23 @@ class Bufferpool:
                 self._evict_latest_page()
 
     def _evict_latest_page(self):
+        # Remove location of page to evict from queue
         pages_id, col = self.evict_queue.popitem(last=False)[0]
 
-        page = self.page_table.get_page(pages_id, col)
+        pages = self.page_table.get_page_entry(pages_id)
+        with pages:
+            page = pages[col]
 
-        if page.pin_count <= 0:
-            is_entry_empty = self.page_table.remove_page(pages_id, col)
+            if page.pin_count <= 0:
+                is_entry_empty = self.page_table.remove_page(pages_id, col)
 
-            if is_entry_empty:
-                tracker = self.tail_trackers if pages_id % 2 else self.base_trackers
-                tracker.pop(pages_id, None)
+                # Also remove page from head/page trackers
+                if is_entry_empty:
+                    tracker = self.tail_trackers if pages_id % 2 else self.base_trackers
+                    tracker.pop(pages_id, None)
 
-            # Write to disk (will check if dirty)
-            self._flush_page_to_disk(page, pages_id, col)
+                # Write to disk (will check if dirty)
+                self._flush_page_to_disk(page, pages_id, col)
 
     def _flush_page_to_disk(self, page, pages_id, col):
         """Currently writes page to disk."""
