@@ -358,3 +358,28 @@ class Bufferpool:
         """Currently writes page to disk."""
         if page is not None and page.is_dirty:
             self.table.disk.add_page(page, pages_id, col)
+
+    def restore(self, rid: RID):
+        """
+        Restores a deleted record by resetting the tombstone flag.
+        :param rid: RID of the record to restore
+        """
+        try:
+            pages_id, offset = rid.get_loc()
+            page = self.page_table.get_page(pages_id, MetaCol.INDIR)
+            if page is None:
+                page = self.fetch_page(pages_id)
+
+            # Read the current indirection value
+            record_val = RID(self._read_val(MetaCol.INDIR, pages_id, offset))
+            if record_val.tombstone == 1:
+                # Reset tombstone flag
+                restored_val = RID.from_params(
+                    record_val.pages_id, record_val.pages_offset, is_base=record_val.is_base, tombstone=0
+                )
+                self._overwrite_val(MetaCol.INDIR, rid, int(restored_val))
+                print(f"Record {rid} restored successfully.")
+            else:
+                print(f"Record {rid} is not marked as deleted.")
+        except Exception as e:
+            print(f"Error restoring record {rid}: {e}")
