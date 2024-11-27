@@ -16,6 +16,7 @@ class Query:
 
     def __init__(self, table):
         self.table: Table = table
+        self.transaction_context = None  # To track if running within a transaction
 
     def delete(self, primary_key) -> bool:
         """
@@ -31,7 +32,14 @@ class Query:
                 return False  # Record not found
 
             rid = rid_list[0]
-            self.table.delete(rid, primary_key)
+            # Log state for rollback if in a transaction
+            if self.transaction_context:
+                record = self.table.buffer.get_record(
+                    rid, [1] * self.table.num_columns, rel_version=0
+                )
+                self.transaction_context.log_delete(rid, record)
+
+            self.table.delete(rid)
             return True
         except Exception as e:
             self._print_error(e)
@@ -99,7 +107,15 @@ class Query:
                 return False  # Record not found
 
             rid = rid_list[0]
-            self.table.update(rid, columns, primary_key)
+
+            # Log state for rollback if in a transaction
+            if self.transaction_context:
+                record = self.table.buffer.get_record(
+                    rid, [1] * self.table.num_columns, rel_version=0
+                )
+                self.transaction_context.log_update(rid, record.columns)
+
+            self.table.update(rid, columns)
             return True
         except Exception as e:
             self._print_error(e)
@@ -227,3 +243,10 @@ class Query:
     def _print_error(err):
         if config.PRINT_ERRORS:
             print(f"{type(err)}: {err}")
+
+    def set_transaction_context(self, transaction):
+        """
+        Sets the transaction context for the query.
+        This ensures that all operations log changes for rollback if necessary.
+        """
+        self.transaction_context = transaction
