@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import threading
 
 from lstore import config
 
@@ -77,6 +78,8 @@ class PageTable:
         
         self.tcols = tcols
         self.size = 0
+
+        self.lock = threading.Lock()
 
     def __iter__(self):
         return iter(self.ptable)

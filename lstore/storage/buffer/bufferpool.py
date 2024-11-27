@@ -66,33 +66,34 @@ class Bufferpool:
 
         :return: new RID
         """
-        # Create base rid
-        pages_b: PageTableEntry = self._get_pages(True)
-        pages_id_b, offset_b = pages_b.get_loc()
-        rid: RID = RID.from_params(pages_id_b, offset_b, is_base=1, tombstone=0)
+        with self.page_table.lock:
+            # Create base rid
+            pages_b: PageTableEntry = self._get_pages(True)
+            pages_id_b, offset_b = pages_b.get_loc()
+            rid: RID = RID.from_params(pages_id_b, offset_b, is_base=1, tombstone=0)
 
-        # Create 'tail' rid (copy of base)
-        pages_t: PageTableEntry = self._get_pages(False)
-        pages_id_t, offset_t = pages_t.get_loc()
-        tail_rid: RID = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=0)
+            # Create 'tail' rid (copy of base)
+            pages_t: PageTableEntry = self._get_pages(False)
+            pages_id_t, offset_t = pages_t.get_loc()
+            tail_rid: RID = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=0)
 
-        # Cache buffer
-        new_vals = self._new_vals_buffer
+            # Cache buffer
+            new_vals = self._new_vals_buffer
 
-        # Write base record
-        new_vals[MetaCol.INDIR] = int(tail_rid)
-        new_vals[MetaCol.RID] = int(rid)
-        new_vals[MetaCol.SCHEMA] = 0
-        new_vals[len(MetaCol):self.tcols] = columns # All data columns
-        pages_b.write_vals(new_vals)
+            # Write base record
+            new_vals[MetaCol.INDIR] = int(tail_rid)
+            new_vals[MetaCol.RID] = int(rid)
+            new_vals[MetaCol.SCHEMA] = 0
+            new_vals[len(MetaCol):self.tcols] = columns # All data columns
+            pages_b.write_vals(new_vals)
 
-        # Write first tail record (copy of base record)
-        new_vals[MetaCol.INDIR] = 0
-        new_vals[MetaCol.RID] = int(tail_rid)
-        pages_t.write_vals(new_vals)
+            # Write first tail record (copy of base record)
+            new_vals[MetaCol.INDIR] = 0
+            new_vals[MetaCol.RID] = int(tail_rid)
+            pages_t.write_vals(new_vals)
 
-        # Return new base rid for index
-        return rid
+            # Return new base rid for index
+            return rid
 
     def update(self, rid: RID, tombstone: Literal[0, 1], columns: tuple[int | None]):
         """
@@ -107,61 +108,62 @@ class Bufferpool:
         :param tombstone: Value of tombstone flag (0 if updating, 1 if deleting)
         :param columns: New data values. Vals are none if no update for that col
         """
-        pages_id_b, offset_b = rid.get_loc()
+        with self.page_table.lock:
+            pages_id_b, offset_b = rid.get_loc()
 
-        self._validate_not_deleted(rid, pages_id_b, offset_b)
+            self._validate_not_deleted(rid, pages_id_b, offset_b)
 
-        # Create new RID
-        pages: PageTableEntry = self._get_pages(False)
-        pages_id_t, offset_t = pages.get_loc()
-        tail_rid: RID = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=tombstone)
+            # Create new RID
+            pages: PageTableEntry = self._get_pages(False)
+            pages_id_t, offset_t = pages.get_loc()
+            tail_rid: RID = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=tombstone)
 
-        # Cache for performance
-        _read_val_cached = self._read_val
+            # Cache for performance
+            _read_val_cached = self._read_val
 
-        new_vals = self._new_vals_buffer
+            new_vals = self._new_vals_buffer
 
-        # Indirection -----------------
+            # Indirection -----------------
 
-        # Set new tail indir to prev tail rid and base indir to new rid
-        indir_rid = RID(_read_val_cached(MetaCol.INDIR, pages_id_b, offset_b))
-        new_vals[MetaCol.INDIR] = int(indir_rid)
-        self._overwrite_val(MetaCol.INDIR, rid, tail_rid)
+            # Set new tail indir to prev tail rid and base indir to new rid
+            indir_rid = RID(_read_val_cached(MetaCol.INDIR, pages_id_b, offset_b))
+            new_vals[MetaCol.INDIR] = int(indir_rid)
+            self._overwrite_val(MetaCol.INDIR, rid, tail_rid)
 
-        # RID ----------- -------------
+            # RID ----------- -------------
 
-        new_vals[MetaCol.RID] = int(tail_rid)
+            new_vals[MetaCol.RID] = int(tail_rid)
 
-        # Schema encoding & data ------
+            # Schema encoding & data ------
 
-        # Get record indices for previous tail record
-        pages_id_i, offset_i = indir_rid.get_loc()
+            # Get record indices for previous tail record
+            pages_id_i, offset_i = indir_rid.get_loc()
 
-        # Get latest schema encoding (go to latest tail if recently merged)
-        schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_b, offset_b)
-        # If latest tail record previously merged into base record
-        if schema_encoding == -1:  
-            schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_i, offset_i)
+            # Get latest schema encoding (go to latest tail if recently merged)
+            schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_b, offset_b)
+            # If latest tail record previously merged into base record
+            if schema_encoding == -1:  
+                schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_i, offset_i)
 
-        # Go through columns while updating schema encoding and data
-        metalen = len(MetaCol)
-        for data_col, val in enumerate(columns):
-            real_col = metalen + data_col
+            # Go through columns while updating schema encoding and data
+            metalen = len(MetaCol)
+            for data_col, val in enumerate(columns):
+                real_col = metalen + data_col
 
-            if val is None:
-                # Get previous value if cumulative
-                val = _read_val_cached(real_col, pages_id_i, offset_i)
-            else:
-                # Update schema by setting appropriate bit to 1
-                schema_encoding |= (1 << data_col)
+                if val is None:
+                    # Get previous value if cumulative
+                    val = _read_val_cached(real_col, pages_id_i, offset_i)
+                else:
+                    # Update schema by setting appropriate bit to 1
+                    schema_encoding |= (1 << data_col)
 
-            new_vals[real_col] = val
+                new_vals[real_col] = val
 
-        # Write both base and new tail record schema encoding
-        new_vals[MetaCol.SCHEMA] = schema_encoding
-        self._overwrite_val(MetaCol.SCHEMA, rid, schema_encoding)
+            # Write both base and new tail record schema encoding
+            new_vals[MetaCol.SCHEMA] = schema_encoding
+            self._overwrite_val(MetaCol.SCHEMA, rid, schema_encoding)
 
-        pages.write_vals(new_vals)
+            pages.write_vals(new_vals)
 
     def read(
             self,

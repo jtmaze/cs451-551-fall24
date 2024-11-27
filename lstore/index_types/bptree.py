@@ -1,6 +1,8 @@
 # %%
 import math
 
+import threading
+
 from lstore import config
 
 from lstore.index_types.bptree_node import BPTreeNode
@@ -18,6 +20,8 @@ class BPTree:
         self.n = n        
         self.root = BPTreeNode(n) # Initializes tree with a root node
         self.root.is_leaf = True # In the beginning, the root is a leaf
+
+        self.lock = threading.Lock()
 
     def insert(self, key_insert, value_insert):
         """
@@ -183,13 +187,14 @@ class BPTreeIndex(IndexType):
         self.tree = BPTree(n=n) # Adjust n as needed to test performance
     
     def get(self, val) -> list[RID]:
-        leaf = self.tree.search_node(val)
-        values = leaf.point_query_node(val)
-        if values is None:
-            return []
-        else:
-            # Return the latest inserted value in a list
-            return [values[-1]]
+        with self.tree.lock:
+            leaf = self.tree.search_node(val)
+            values = leaf.point_query_node(val)
+            if values is None:
+                return []
+            else:
+                # Return the latest inserted value in a list
+                return [values[-1]]
         
     def get_range_val(self, begin, end):
         """
@@ -207,7 +212,8 @@ class BPTreeIndex(IndexType):
         return self.get_range_val(begin, end)
     
     def insert(self, val, rid):
-        self.tree.insert(val, rid)
+        with self.tree.lock:
+            self.tree.insert(val, rid)
 
     def delete(self, val):
         """
