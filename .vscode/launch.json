@@ -78,5 +78,41 @@
             "args": [
             ]
         },
+        {
+            "name": "m3_tester_part_1",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/m3_tester_part_1.py",
+            "console": "integratedTerminal",
+            "args": [
+            ]
+        },
+        {
+            "name": "m3_tester_part_2",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/m3_tester_part_2.py",
+            "console": "integratedTerminal",
+            "args": [
+            ]
+        },
+        {
+            "name": "exam_tester_m3_part1",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/exam_tester_m3_part1.py",
+            "console": "integratedTerminal",
+            "args": [
+            ]
+        },
+        {
+            "name": "exam_tester_m3_part2",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/exam_tester_m3_part2.py",
+            "console": "integratedTerminal",
+            "args": [
+            ]
+        },
     ]
 }

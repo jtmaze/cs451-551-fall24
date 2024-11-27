@@ -1,5 +1,7 @@
 import math
 
+import threading
+
 from lstore import config
 
 class BPTreeNode:
@@ -15,6 +17,8 @@ class BPTreeNode:
         self.parent_node = None # Do I need a pointer to back to the parent node?
         self.forward_key = None # Pointer to the next leaf node
         self.is_leaf = False # Boolean denoting if the node is a leaf
+
+        self.lock = threading.Lock()
 
     def leaf_insert(self, leaf, key_insert, value_insert):
         """

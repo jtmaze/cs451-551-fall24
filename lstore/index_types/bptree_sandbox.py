@@ -1,14 +1,143 @@
-# %%
+
+#%%
+# 
 import math
 
-import threading
+#from lstore import config
+#from lstore.index_types.bptree_node import BPTreeNode
+#from lstore.index_types.index_type import IndexType
 
-from lstore import config
+#from lstore.storage.rid import RID
 
-from lstore.index_types.bptree_node import BPTreeNode
-from lstore.index_types.index_type import IndexType
 
-from lstore.storage.rid import RID
+class BPTreeNode:
+    def __init__(self, n):
+       
+        """
+        n: the maximum number of keys in a node
+        """
+
+        self.n = n 
+        self.keys = [] # sorted list of keys
+        self.values = [] # list of list of values (should be RIDs?)
+        self.parent_node = None # Do I need a pointer to back to the parent node?
+        self.forward_key = None # Pointer to the next leaf node
+        self.is_leaf = False # Boolean denoting if the node is a leaf
+
+    def leaf_insert(self, leaf, key_insert, value_insert):
+        """
+        Inserts a key/value pair into a leaf node
+        leaf: Should checks if node is a leaf
+        key_insert: a single key to insert
+        value_insert: a single value (RID) to insert
+        """
+        current_keys = self.keys
+        current_vals = self.values
+        # 1) Leaf node is empty (easy case)
+        if len(current_keys) == 0:
+            self.keys.append(key_insert)
+            self.values.append([value_insert])
+            #print(f'Key:{key_insert} and RID:{value_insert} inserted on empty leaf node')
+
+        # 2) Leaf node is not empty
+        else:
+            inserted = False
+            for i in range(len(current_keys)):
+                # First try to insert on lower keys and values
+                if key_insert < current_keys[i]:
+                    self.keys.insert(i, key_insert)
+                    self.values.insert(i, [value_insert])
+                    #print(f'Key:{key_insert} and RID:{value_insert} inserted on leaf node')
+                    inserted = True
+                    break
+                
+                elif key_insert == current_keys[i]: 
+                    self.values[i].append(value_insert)
+                    #print(f'Appening a new value {value_insert} to existing key {key_insert}')
+                    inserted = True
+                    break
+                
+            if not inserted:
+                self.keys.append(key_insert)
+                self.values.append([value_insert])
+                #print(f'Key:{key_insert} and RID:{value_insert} inserted on leaf node')
+                return
+            
+    def leaf_delete(self, leaf, key_delete, value_delete):
+
+        """Deletes a specific value from the leaf node"""
+
+        current_keys = self.keys
+        current_values = self.values
+
+        if self.is_leaf:
+            for i in range(len(current_keys)):
+                if key_delete == current_keys[i]:
+                    try:
+                        current_values[i].remove(value_delete)
+                        print(f'Key {key_delete}, Value {value_delete} removed')
+                        if current_keys[i] == 0:
+                            del current_keys[i]
+                            del current_values[i]
+                            print(f'Key {key_delete} is empty, no more vals')
+                        break
+                    except ValueError:
+                        print(f'Value {value_delete}, not found in leaf node')
+                        break
+        else:
+            print(f'Key {key_delete} not found in leaf node')
+
+ 
+        
+    def point_query_node(self, search_key):
+        """searches a leaf node for a single key's values"""
+        
+        current_vals = self.values
+        current_keys = self.keys
+
+        if self.is_leaf:
+            for i in range(len(current_keys)):
+                if current_keys[i] == search_key:
+                    #print(f'Key:{search_key} found in leaf node')
+                    return current_vals[i]
+                
+            if config.DEBUG_PRINT:
+                pass
+                #print(f'Key:{search_key} not found in leaf node')
+                
+            return None
+        
+
+    def range_query_leaf(self, key_low, key_high):
+        """
+        Inputs: the low and high key for a range query on a leaf 
+        
+        Returns:
+        - A list of values within the keys range.
+        - A next pointer IF needed 
+        """
+        current_keys = self.keys
+        current_vals = self.values
+        results = []
+        next_pointer = None
+
+        leaf_max_key = current_keys[-1]
+        # 1) Easy case, entire range query on leaf node
+        if key_high <= leaf_max_key:
+            next_pointer = None
+        # 2) Harder case follow pointer right to higher node    
+        else:
+            next_pointer = self.forward_key
+
+        for i in range(len(current_keys)):
+            if current_keys[i] > key_high:
+                break # More efficient to end loop when done
+            if key_low <= current_keys[i]:
+                results.append(current_vals[i])
+
+        return(results, next_pointer)
+
+# %%
 
 class BPTree:
     def __init__(self, n):
@@ -21,8 +150,6 @@ class BPTree:
         self.root = BPTreeNode(n) # Initializes tree with a root node
         self.root.is_leaf = True # In the beginning, the root is a leaf
 
-        self.lock = threading.Lock()
-
     def insert(self, key_insert, value_insert):
         """
         Inserts a key/value pair into the tree and splits if full
@@ -34,12 +161,12 @@ class BPTree:
         if len(leaf_node.keys) > self.n - 1: # 3) If full, split the node
             self.split_node(leaf_node)
 
-    def delete(self, key_delete):
+    def delete(self, key_delete, value_delete):
         """
         TODO: Implement for persistent memory
         """
         leaf_node = self.search_node(key_delete)
-        leaf_node.leaf_delete(leaf_node, key_delete)
+        leaf_node.leaf_delete(leaf_node, key_delete, value_delete)
         
         if len(leaf_node.keys) < math.ceil(self.n / 2):
             print('UGHHH doing rebalancing later')
@@ -98,8 +225,8 @@ class BPTree:
             node_to_split.parent_node = new_root
             new_node.parent_node = new_root
             self.root = new_root
-            if config.DEBUG_PRINT:
-                pass
+            #if config.DEBUG_PRINT:
+                #pass
                 #print(f'New root created on {new_root.keys}')
 
         else:
@@ -179,47 +306,68 @@ class BPTree:
             low_leaf = next_leaf_pointer
 
         return results
-
-### B+ Tree Implementation
-class BPTreeIndex(IndexType):
-    def __init__(self, n=100):
-        self.n = n
-        self.tree = BPTree(n=n) # Adjust n as needed to test performance
     
-    def get(self, val) -> list[RID]:
-        with self.tree.lock:
-            leaf = self.tree.search_node(val)
-            values = leaf.point_query_node(val)
-            if values is None:
-                return []
-            else:
-                # Return the latest inserted value in a list
-                return [values[-1]]
-        
-    def get_range_val(self, begin, end):
-        """
-        Gets list of RIDs with column value all between begin and end value
-        """
-        results = self.tree.get_range_val(begin, end)
-        # Extract the latest value (most recent) from each key's values
-        latest_values = [sublist[-1] for sublist in results if sublist]
-        return latest_values
-    
-    def get_range_key(self, begin, end):
-        """
-        Gets list of RIDs with Prim ID all between begin and end value
-        """
-        return self.get_range_val(begin, end)
-    
-    def insert(self, val, rid):
-        with self.tree.lock:
-            self.tree.insert(val, rid)
+    # Helpers ---------------------
 
-    def delete(self, val):
-        """
-        !!! Values will be deleted from leafs, but tree won't rebalance yet.
-        """
-        self.tree.delete(val)
 
-    def clear(self):
-        self.tree = BPTree(n=self.n)
+    def display(self, node=None, level=0):
+        """
+        For testing BPTree Methods
+        Couldn't actually hide method as true helper
+        """
+        if node is None:
+            node = self.root
+        indent = '    ' * level
+        if node.is_leaf:
+            print(f"{indent}Level {level} Leaf Node: Keys={node.keys}, Values={node.values}")
+        else:
+            print(f"{indent}Level {level} Internal Node: Keys={node.keys}")
+            for child in node.values:
+                self.display(child, level + 1)
+
+# %%
+
+bpt = BPTree(n=4)
+
+data = [
+    (7, 'RID05'),
+    (8, 'RID03'),
+    (10, 'RID78'),
+    (10, 'RID09'),
+    (10, 'RID11'),
+    (11, 'RID90'),
+    (12, 'RID07'),
+    (13, 'RID12'),
+    (15, 'RID14'),
+    (16, 'RID60')
+]
+
+for grade, rid in data:
+    bpt.insert(grade, rid)
+
+
+# %%
+
+bpt.display()
+
+# %%
+
+delete_data = [
+    (10, 'RID09'), 
+    (12, 'RID07'),
+    (10, 'RID78')
+]
+
+for grade, rid in delete_data:
+    bpt.delete(grade, rid)
+
+bpt.display()
+
+# %%
+
+for grade, rid in delete_data:
+    bpt.delete(grade, rid)
+
+bpt.display()
+
+# %%
