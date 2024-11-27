@@ -115,7 +115,7 @@ class Query:
                 )
                 self.transaction_context.log_update(rid, record.columns)
 
-            self.table.update(rid, columns)
+            self.table.update(rid, columns, primary_key)
             return True
         except Exception as e:
             self._print_error(e)
