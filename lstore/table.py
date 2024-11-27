@@ -259,4 +259,22 @@ class Table:
         if not self.index.locate(self.key, primary_key):
             e = f"No record with key {primary_key} exists, skipping delete."
             raise Table.MissingKeyError(e)
-        
+
+    # the following functions will be called by transaction.abort for rollback
+    def rollback_update(self, rid, original_columns):
+        # Restore original columns
+        try:
+            # Restore the original columns as a tail record update
+            self.buffer.update_record(rid, original_columns)
+            print(f"Rollback update: Restored record {rid} to original values.")
+        except Exception as e:
+            print(f"Error rolling back update for record {rid}: {e}")
+
+    def rollback_delete(self, rid):
+        # Mark the record as valid again
+        try:
+            # Restore the deleted record to make it valid again
+            self.buffer.restore_record(rid)
+            print(f"Rollback delete: Restored record {rid} as valid.")
+        except Exception as e:
+            print(f"Error rolling back delete for record {rid}: {e}")
