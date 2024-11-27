@@ -9,9 +9,12 @@ class TransactionWorker:
     # Creates a transaction worker object.
     """
 
-    def __init__(self, transactions=[]):
+    def __init__(self, transactions=None):
         self.stats = []
-        self.transactions = transactions
+        if transactions is None:
+            self.transactions = []
+        else:
+            self.transactions = transactions
         self.result = 0
         self.thread = None  # Thread for running transactions
 
