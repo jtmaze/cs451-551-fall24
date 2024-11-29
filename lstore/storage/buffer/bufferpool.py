@@ -293,18 +293,17 @@ class Bufferpool:
             if pages is None:
                 pages = self.page_table.init_pages(pages_id)
 
-        with pages.lock:
-            # Get page (from disk if necessary)
-            page = pages[col]
-            if page is None:
-                page = self._get_page_from_disk(pages, pages_id, col)
-            
-            pages.offset = page.offset
+        # Get page (from disk if necessary)
+        page = pages[col]
+        if page is None:
+            page = self._get_page_from_disk(pages, pages_id, col)
+        
+        pages.offset = page.offset
 
-            page = self._update_evict_queue(page, pages_id, col)
+        self._update_evict_queue(pages_id, col)
 
-            page.update(val, offset)
-            page.is_dirty = True
+        page.update(val, offset)
+        page.is_dirty = True
 
     def _read_val(self, col: int, pages_id: int, offset: int):
         """
@@ -316,17 +315,16 @@ class Bufferpool:
         if pages is None:
             pages = self.page_table.init_pages(pages_id)
 
-        with pages.lock:
-            # Get page (from disk if necessary)
-            page = pages[col]
-            if page is None:
-                page = self._get_page_from_disk(pages, pages_id, col)
+        # Get page (from disk if necessary)
+        page = pages[col]
+        if page is None:
+            page = self._get_page_from_disk(pages, pages_id, col)
 
-            pages.offset = page.offset
+        pages.offset = page.offset
 
-            self._update_evict_queue(pages_id, col)
+        self._update_evict_queue(pages_id, col)
 
-            return page.read(offset)
+        return page.read(offset)
         
     def _get_page_from_disk(self, pages: PageTableEntry, pages_id: int, col: int):
         """
