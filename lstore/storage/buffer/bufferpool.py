@@ -284,47 +284,71 @@ class Bufferpool:
 
         return pages
     
-    def _overwrite_val(self, col: int, rid, val: int, pages=None):
+    def _overwrite_val(self, col: int, rid, val: int, pages: PageTableEntry = None):
         pages_id, offset = rid.get_loc()
 
+        # Get page entry if not given (create empty one if needed)
         if pages is None:
-            pages = self.page_table.get_page_entry(pages_id)
-        
-        page = pages[col]
-        self._get_page_in_memory(page, pages_id, col)
+            pages = self.page_table.get_entry(pages_id)
+            if pages is None:
+                pages = self.page_table.init_pages(pages_id, page.offset)
 
-        page.update(val, offset)
-        page.is_dirty = True
+        with pages.lock:
+            # Get page (from disk if necessary)
+            page = pages[col]
+            if page is None:
+                page = self._get_page_from_disk(pages, pages_id, col)
+
+            page = self._update_evict_queue(page, pages_id, col)
+
+            page.update(val, offset)
+            page.is_dirty = True
 
     def _read_val(self, col: int, pages_id: int, offset: int):
         """
         Reads a value from a page given a column (including metadata cols)
         and a page id/offset.
         """
+        # Get page entry (create empty one if needed)
         pages = self.page_table.get_entry(pages_id)
+        if pages is None:
+            pages = self.page_table.init_pages(pages_id, page.offset)
 
         with pages.lock:
+            # Get page (from disk if necessary)
             page = pages[col]
-            page = self._get_page_in_memory(page, pages_id, col)
+            if page is None:
+                page = self._get_page_from_disk(pages, pages_id, col)
+
+            self._update_evict_queue(pages_id, col)
 
             return page.read(offset)
+        
+    def _get_page_from_disk(self, pages: PageTableEntry, pages_id: int, col: int):
+        """
+        Gets page from disk, adds it to page entry and adds to evict queue.
+        """
+        # Create page from disk and add to entry
+        disk: Disk = self.table.disk
+        page = disk.get_page(pages_id, col)
 
-    def _get_page_in_memory(self, page, pages_id, col):
-        if page is None:
-            page = self._fetch_page_from_disk(pages_id, col)
+        pages.add_page(page, col)
 
-            if self.max_buffer_size:
-                self.evict_queue[(pages_id, col)] = None
-                self.evict_queue.move_to_end((pages_id, col), last=self.use_lru)
-                self._evict_pages()
-        elif self.max_buffer_size:
+        self._add_to_evict_queue(pages_id, col)
+
+        return page
+        
+    def _add_to_evict_queue(self, pages_id, col):
+        if self.max_buffer_size:
+            self.evict_queue[(pages_id, col)] = None
+
+    def _update_evict_queue(self, pages_id, col):
+        if self.max_buffer_size:
             try:
                 self.evict_queue.move_to_end((pages_id, col), last=self.use_lru)
                 self._evict_pages()
             except KeyError:
                 pass
-
-        return page
 
     def _get_versioned_indices(self, pages_id, offset, rel_version):
         """
@@ -349,23 +373,6 @@ class Bufferpool:
         if RID(self._read_val(MetaCol.INDIR, pages_id, offset)).tombstone:
             raise KeyError(f"Record {int(rid)} was deleted")
 
-    def _fetch_page_from_disk(self, pages_id, col):
-        """
-        Fetch a page from the disk.
-        """
-        disk: Disk = self.table.disk
-
-        # Create page from disk
-        page = disk.get_page(pages_id, col)
-        
-        # Populate page table entry
-        pages: PageTableEntry = self.page_table.get_entry(pages_id)
-        if pages is None:
-            pages = self.page_table.init_pages(pages_id, page.offset)
-        pages.add_page(page, col)
-
-        return page
-    
     def _evict_pages(self):
         if self.max_buffer_size:
             while len(self.evict_queue) > self.max_buffer_size:
