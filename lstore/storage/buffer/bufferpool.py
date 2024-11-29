@@ -6,6 +6,7 @@ offsets.
 
 from typing import Literal
 
+import threading
 from collections import OrderedDict  # MRU cache
 
 from lstore.storage.record import Record
@@ -18,7 +19,6 @@ from lstore import config
 
 from lstore.page import Page
 from lstore.storage.disk import Disk
-
 
 class Bufferpool:
     """
@@ -45,18 +45,20 @@ class Bufferpool:
         
         # Pointers to pages in page_table (only as ordered sets)
         # Allows tracking base/tails in memory and and getting latest for writing
-        # TODO: just use sets and single values for latest
         self.base_trackers = OrderedDict()
         self.tail_trackers = OrderedDict()
 
         # Saves page id and col as tuple in key for eviction
         self.evict_queue = OrderedDict()
+        
+        self.evict_lock = threading.Lock()
+        self.disk_lock = threading.Lock()
 
         self._new_vals_buffer = [None for _ in range(self.tcols)]
 
     def write(self, columns: tuple[int]) -> RID:
         """
-        Writes a new record with the given data columns.
+        Writes a new record w/ the given data columns.
         Marks the page as dirty if modified.
 
         Returns a list of RecordIndex objects to be used as values in the
@@ -67,33 +69,40 @@ class Bufferpool:
         :return: new RID
         """
         with self.page_table.lock:
-            # Create base rid
-            pages_b: PageTableEntry = self._get_pages(True)
-            pages_id_b, offset_b = pages_b.get_loc()
-            rid: RID = RID.from_params(pages_id_b, offset_b, is_base=1, tombstone=0)
+            pages_b = self._get_latest_page_entry(True)
+            pages_t = self._get_latest_page_entry(False)
 
-            # Create 'tail' rid (copy of base)
-            pages_t: PageTableEntry = self._get_pages(False)
-            pages_id_t, offset_t = pages_t.get_loc()
-            tail_rid: RID = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=0)
+            pages_b.lock.acquire()
+            pages_t.lock.acquire()
 
-            # Cache buffer
-            new_vals = self._new_vals_buffer
+        # Create base rid
+        pages_id_b, offset_b = pages_b.get_loc()
+        rid: RID = RID.from_params(pages_id_b, offset_b, is_base=1, tombstone=0)
 
-            # Write base record
-            new_vals[MetaCol.INDIR] = int(tail_rid)
-            new_vals[MetaCol.RID] = int(rid)
-            new_vals[MetaCol.SCHEMA] = 0
-            new_vals[len(MetaCol):self.tcols] = columns # All data columns
-            pages_b.write_vals(new_vals)
+        # Create 'tail' rid (copy of base)
+        pages_id_t, offset_t = pages_t.get_loc()
+        tail_rid: RID = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=0)
 
-            # Write first tail record (copy of base record)
-            new_vals[MetaCol.INDIR] = 0
-            new_vals[MetaCol.RID] = int(tail_rid)
-            pages_t.write_vals(new_vals)
+        # Cache buffer
+        new_vals = self._new_vals_buffer
 
-            # Return new base rid for index
-            return rid
+        # Write base record
+        new_vals[MetaCol.INDIR] = int(tail_rid)
+        new_vals[MetaCol.RID] = int(rid)
+        new_vals[MetaCol.SCHEMA] = 0
+        new_vals[len(MetaCol):self.tcols] = columns # All data columns
+        pages_b.write_vals(new_vals)
+
+        # Write first tail record (copy of base record)
+        new_vals[MetaCol.INDIR] = 0
+        new_vals[MetaCol.RID] = int(tail_rid)
+        pages_t.write_vals(new_vals)
+
+        pages_t.lock.release()
+        pages_b.lock.release()
+
+        # Return new base rid for index
+        return rid
 
     def update(self, rid: RID, tombstone: Literal[0, 1], columns: tuple[int | None]):
         """
@@ -108,62 +117,68 @@ class Bufferpool:
         :param tombstone: Value of tombstone flag (0 if updating, 1 if deleting)
         :param columns: New data values. Vals are none if no update for that col
         """
+        pages_id_b, offset_b = rid.get_loc()
+        self._validate_not_deleted(rid, pages_id_b, offset_b)
+
         with self.page_table.lock:
-            pages_id_b, offset_b = rid.get_loc()
+            pages_b = self.page_table.get_entry(pages_id_b)
+            pages_t = self._get_latest_page_entry(False)
 
-            self._validate_not_deleted(rid, pages_id_b, offset_b)
+            pages_b.lock.acquire()
+            pages_t.lock.acquire()
 
-            # Create new RID
-            pages: PageTableEntry = self._get_pages(False)
-            pages_id_t, offset_t = pages.get_loc()
-            tail_rid: RID = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=tombstone)
+        # Create new RID
+        pages_id_t, offset_t = pages_t.get_loc()
+        tail_rid = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=tombstone)
 
-            # Cache for performance
-            _read_val_cached = self._read_val
+        # Cache for performance
+        _read_val_cached = self._read_val
+        new_vals = self._new_vals_buffer
 
-            new_vals = self._new_vals_buffer
+        # Indirection -----------------
 
-            # Indirection -----------------
+        # Set new tail indir to prev tail rid and base indir to new rid
+        indir_rid = RID(_read_val_cached(MetaCol.INDIR, pages_id_b, offset_b))
+        new_vals[MetaCol.INDIR] = int(indir_rid)
+        self._overwrite_val(MetaCol.INDIR, rid, tail_rid, pages_b)
 
-            # Set new tail indir to prev tail rid and base indir to new rid
-            indir_rid = RID(_read_val_cached(MetaCol.INDIR, pages_id_b, offset_b))
-            new_vals[MetaCol.INDIR] = int(indir_rid)
-            self._overwrite_val(MetaCol.INDIR, rid, tail_rid)
+        # RID ----------- -------------
 
-            # RID ----------- -------------
+        new_vals[MetaCol.RID] = int(tail_rid)
 
-            new_vals[MetaCol.RID] = int(tail_rid)
+        # Schema encoding & data ------
 
-            # Schema encoding & data ------
+        # Get record indices for previous tail record
+        pages_id_i, offset_i = indir_rid.get_loc()
 
-            # Get record indices for previous tail record
-            pages_id_i, offset_i = indir_rid.get_loc()
+        # Get latest schema encoding (go to latest tail if recently merged)
+        schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_b, offset_b)
+        # If latest tail record previously merged into base record
+        if schema_encoding == -1:  
+            schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_i, offset_i)
 
-            # Get latest schema encoding (go to latest tail if recently merged)
-            schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_b, offset_b)
-            # If latest tail record previously merged into base record
-            if schema_encoding == -1:  
-                schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_i, offset_i)
+        # Go through columns while updating schema encoding and data
+        metalen = len(MetaCol)
+        for data_col, val in enumerate(columns):
+            real_col = metalen + data_col
 
-            # Go through columns while updating schema encoding and data
-            metalen = len(MetaCol)
-            for data_col, val in enumerate(columns):
-                real_col = metalen + data_col
+            if val is None:
+                # Get previous value if cumulative
+                val = _read_val_cached(real_col, pages_id_i, offset_i)
+            else:
+                # Update schema by setting appropriate bit to 1
+                schema_encoding |= (1 << data_col)
 
-                if val is None:
-                    # Get previous value if cumulative
-                    val = _read_val_cached(real_col, pages_id_i, offset_i)
-                else:
-                    # Update schema by setting appropriate bit to 1
-                    schema_encoding |= (1 << data_col)
+            new_vals[real_col] = val
 
-                new_vals[real_col] = val
+        # Write both base and new tail record schema encoding
+        new_vals[MetaCol.SCHEMA] = schema_encoding
+        self._overwrite_val(MetaCol.SCHEMA, rid, schema_encoding, pages_b)
 
-            # Write both base and new tail record schema encoding
-            new_vals[MetaCol.SCHEMA] = schema_encoding
-            self._overwrite_val(MetaCol.SCHEMA, rid, schema_encoding)
+        pages_t.write_vals(new_vals)
 
-            pages.write_vals(new_vals)
+        pages_t.lock.release()
+        pages_b.lock.release()
 
     def read(
             self,
@@ -179,7 +194,7 @@ class Bufferpool:
         :param proj_col_idx: List of 0s or 1s indicating which columns to return
         :param rel_version: Relative version to return. 0 is latest, -<n> are prev
 
-        :return: Record with retrieved data in record.columns and base rid
+        :return: Record w/ retrieved data in record.columns and base rid
         """
         pages_id, offset = rid.get_loc()
 
@@ -208,158 +223,6 @@ class Bufferpool:
 
         return Record(self.table.key, columns, rid)
 
-    def pin_page(self, page_id):
-        """Increment the pin count for a specific page to prevent eviction."""
-        page = self.page_table.get(page_id)
-        if page:
-            page.pin_count += 1
-
-    def unpin_page(self, page_id):
-        """Decrement the pin count for a specific page, allowing for eviction."""
-        page = self.page_table.get(page_id)
-        if page:
-            page.pin_count = max(0, page.pin_count - 1)
-
-    def flush_to_disk(self):
-        """Flushes all pages in bufferpool's page table to the disk."""
-        for pages_id in self.page_table:
-            for col in range(self.tcols):
-                page = self.page_table.get_page(pages_id, col)
-
-                self._flush_page_to_disk(page, pages_id, col)
-
-    # Helpers ------------------------
-
-    def _get_pages(self, is_base):
-        page_tracker = self.base_trackers if is_base else self.tail_trackers
-
-        if page_tracker:
-            pages_id = next(reversed(page_tracker))
-            pages: PageTableEntry = self.page_table.get_page_entry(pages_id)
-        else:
-            pages = None
-
-        if pages is None:
-            pages, pages_id = self.page_table.create_pages(is_base)
-            page_tracker[pages_id] = None  # Value doesn't matter, used as ordered set
-        elif not pages.has_capacity():
-            pages, pages_id = self.page_table.create_pages(is_base)
-
-            # Add full pages to the evict queue
-            if self.max_buffer_size:
-                for col in range(self.tcols):
-                    self.evict_queue[(pages_id, col)] = None
-                    self.evict_queue.move_to_end((pages_id, col), last=self.use_lru)
-                    self._evict_pages()
-
-            page_tracker[pages_id] = None  # Value doesn't matter, used as ordered set
-
-        return pages
-    
-    def _overwrite_val(self, col:int, rid: RID, val: int):
-        """
-        Overwrites a value in a page, marking it as dirty.
-        """
-        pages_id, offset = rid.get_loc()
-
-        page = self.page_table.get_page(pages_id, col)
-        self._validate_read_page(page, pages_id, col)
-
-        page.update(val, offset)
-        page.is_dirty = True
-
-    def _read_val(self, col: int, pages_id: int, offset: int):
-        """
-        Reads a value from a page given a column (including metadata cols)
-        and a page id/offset.
-        """
-        page = self.page_table.get_page(pages_id, col)
-        page = self._validate_read_page(page, pages_id, col)
-
-        return page.read(offset)
-    
-    def _validate_read_page(self, page, pages_id, col):
-        if page is None:
-            page = self._fetch_page_from_disk(pages_id, col)
-
-            if self.max_buffer_size:
-                self.evict_queue[(pages_id, col)] = None
-                self.evict_queue.move_to_end((pages_id, col), last=self.use_lru)
-                self._evict_pages()
-        elif self.max_buffer_size:
-            try:
-                self.evict_queue.move_to_end((pages_id, col), last=self.use_lru)
-                self._evict_pages()
-            except KeyError:
-                pass
-
-        return page
-
-    def _get_versioned_indices(self, pages_id, offset, rel_version):
-        """
-        Given base record indices, gets record indices for a given relative
-        version. Will always go to most recent tail record (version 0) at least.
-        """
-        # Will do it at least once since version 0 is newest tail record
-        while rel_version <= 0:
-            # Get previous tail record (or base record). base.indir == base.rid!
-            indir = RID(self._read_val(MetaCol.INDIR, pages_id, offset))
-
-            if indir <= 0 or indir.is_base:
-                break
-
-            pages_id, offset = indir.get_loc()
-
-            rel_version += 1
-
-        return pages_id, offset
-
-    def _validate_not_deleted(self, rid, pages_id, offset):
-        if RID(self._read_val(MetaCol.INDIR, pages_id, offset)).tombstone:
-            raise KeyError(f"Record {int(rid)} was deleted")
-
-    def _fetch_page_from_disk(self, pages_id, col):
-        """
-        Fetch a page from the disk.
-        """
-        disk: Disk = self.table.disk
-
-        # Create page from disk
-        page = disk.get_page(pages_id, col)
-        
-        # Populate page table entry
-        pages: PageTableEntry = self.page_table.get_page_entry(pages_id)
-        if pages is None:
-            pages = self.page_table.init_pages(pages_id, page.offset)
-        pages.add_page(page, col)
-
-        return page
-    
-    def _evict_pages(self):
-        if self.max_buffer_size:
-            while len(self.evict_queue) > self.max_buffer_size:
-                self._evict_latest_page()
-
-    def _evict_latest_page(self):
-        pages_id, col = self.evict_queue.popitem(last=False)[0]
-
-        page = self.page_table.get_page(pages_id, col)
-
-        if page.pin_count <= 0:
-            is_entry_empty = self.page_table.remove_page(pages_id, col)
-
-            if is_entry_empty:
-                tracker = self.tail_trackers if pages_id % 2 else self.base_trackers
-                tracker.pop(pages_id, None)
-
-            # Write to disk (will check if dirty)
-            self._flush_page_to_disk(page, pages_id, col)
-
-    def _flush_page_to_disk(self, page, pages_id, col):
-        """Currently writes page to disk."""
-        if page is not None and page.is_dirty:
-            self.table.disk.add_page(page, pages_id, col)
-
     def restore(self, rid: RID):
         """
         Restores a deleted record by resetting the tombstone flag.
@@ -384,3 +247,159 @@ class Bufferpool:
                 print(f"Record {rid} is not marked as deleted.")
         except Exception as e:
             print(f"Error restoring record {rid}: {e}")
+
+    def flush_to_disk(self):
+        """Flushes all pages in bufferpool's page table to the disk."""
+        for pages_id in self.page_table:
+            pages = self.page_table.get_entry(pages_id)
+
+            for col in range(self.tcols):
+                self._flush_page_to_disk(pages[col], pages_id, col)
+
+    # Helpers ------------------------
+
+    def _get_latest_page_entry(self, is_base) -> PageTableEntry:
+        page_tracker = self.base_trackers if is_base else self.tail_trackers
+
+        if page_tracker:
+            pages_id = next(reversed(page_tracker))
+            pages: PageTableEntry = self.page_table.get_entry(pages_id)
+        else:
+            pages = None
+
+        if pages is None:
+            pages, pages_id = self.page_table.create_pages(is_base)
+            page_tracker[pages_id] = None  # Value doesn't matter, used as ordered set
+        elif not pages.has_capacity():
+            pages, pages_id = self.page_table.create_pages(is_base)
+
+            # Add full pages to the evict queue
+            if self.max_buffer_size:
+                for col in range(self.tcols):
+                    self.evict_queue[(pages_id, col)] = None
+                    self.evict_queue.move_to_end((pages_id, col), last=self.use_lru)
+                    self._evict_pages()
+
+            page_tracker[pages_id] = None  # Value doesn't matter, used as ordered set
+
+        return pages
+    
+    def _overwrite_val(self, col: int, rid, val: int, pages: PageTableEntry = None):
+        pages_id, offset = rid.get_loc()
+
+        # Get page entry if not given (create empty one if needed)
+        if pages is None:
+            pages = self.page_table.get_entry(pages_id)
+            if pages is None:
+                pages = self.page_table.init_pages(pages_id)
+
+        # Get page (from disk if necessary)
+        page = pages[col]
+        if page is None:
+            page = self._get_page_from_disk(pages, pages_id, col)
+        
+        pages.offset = page.offset
+
+        self._update_evict_queue(pages_id, col)
+
+        page.update(val, offset)
+        page.is_dirty = True
+
+    def _read_val(self, col: int, pages_id: int, offset: int):
+        """
+        Reads a value from a page given a column (including metadata cols)
+        and a page id/offset.
+        """
+        # Get page entry (create empty one if needed)
+        pages = self.page_table.get_entry(pages_id)
+        if pages is None:
+            pages = self.page_table.init_pages(pages_id)
+
+        # Get page (from disk if necessary)
+        page = pages[col]
+        if page is None:
+            page = self._get_page_from_disk(pages, pages_id, col)
+
+        pages.offset = page.offset
+
+        self._update_evict_queue(pages_id, col)
+
+        return page.read(offset)
+        
+    def _get_page_from_disk(self, pages: PageTableEntry, pages_id: int, col: int):
+        """
+        Gets page from disk, adds it to page entry and adds to evict queue.
+        """
+        # Create page from disk and add to entry
+        disk: Disk = self.table.disk
+        page = disk.get_page(pages_id, col)
+
+        pages.add_page(page, col)
+
+        self._add_to_evict_queue(pages_id, col)
+
+        return page
+        
+    def _add_to_evict_queue(self, pages_id, col):
+        if self.max_buffer_size:
+            self.evict_queue[(pages_id, col)] = None
+
+    def _update_evict_queue(self, pages_id, col):
+        if self.max_buffer_size:
+            try:
+                self.evict_queue.move_to_end((pages_id, col), last=self.use_lru)
+                self._evict_pages()
+            except KeyError:
+                pass
+
+    def _get_versioned_indices(self, pages_id, offset, rel_version):
+        """
+        Given base record indices, gets record indices for a given relative
+        version. Will always go to most recent tail record (version 0) at least.
+        """
+        # Will do it at least once since version 0 is newest tail record
+        while rel_version <= 0:
+            # Get previous tail record (or base record). base.indir == base.rid!
+            indir = RID(self._read_val(MetaCol.INDIR, pages_id, offset))
+
+            if indir <= 0 or indir.is_base:
+                break
+
+            pages_id, offset = indir.get_loc()
+
+            rel_version += 1
+
+        return pages_id, offset
+
+    def _validate_not_deleted(self, rid, pages_id, offset):
+        if RID(self._read_val(MetaCol.INDIR, pages_id, offset)).tombstone:
+            raise KeyError(f"Record {int(rid)} was deleted")
+
+    def _evict_pages(self):
+        if self.max_buffer_size:
+            while len(self.evict_queue) > self.max_buffer_size:
+                self._evict_latest_page()
+
+    def _evict_latest_page(self):
+        # Remove location of page to evict from queue
+        pages_id, col = self.evict_queue.popitem(last=False)[0]
+
+        pages = self.page_table.get_entry(pages_id)
+        
+        page = pages[col]
+
+        if page.pin_count <= 0:
+            is_entry_empty = self.page_table.remove_page(pages_id, col)
+
+            # Also remove page from head/page trackers
+            if is_entry_empty:
+                tracker = self.tail_trackers if pages_id % 2 else self.base_trackers
+                tracker.pop(pages_id, None)
+
+            # Write to disk (will check if dirty)
+            self._flush_page_to_disk(page, pages_id, col)
+
+    def _flush_page_to_disk(self, page, pages_id, col):
+        """Currently writes page to disk."""
+        if page is not None and page.is_dirty:
+            self.table.disk.add_page(page, pages_id, col)

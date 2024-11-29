@@ -28,8 +28,10 @@ if "%Test%"=="main" (
     py .\m2_tester_part1.py > "%OutputDir%\m2_tester_part1.txt"
 ) else if "%Test%"=="22" (
     py .\m2_tester_part2.py > "%OutputDir%\m2_tester_part2.txt"
-) else if "%Test%"=="3" (
-    py .\m3_tester.py > "%OutputDir%\m3_tester.txt"
+) else if "%Test%"=="31" (
+    py .\m3_tester.py > "%OutputDir%\m3_tester_part_1.txt"
+) else if "%Test%"=="32" (
+    py .\m3_tester.py > "%OutputDir%\m3_tester_part_2.txt"
 ) else if "%Test%"=="exam1" (
     py .\exam_tester_m1.py > "%OutputDir%\exam_tester_m1.txt"
 ) else if "%Test%"=="exam21" (

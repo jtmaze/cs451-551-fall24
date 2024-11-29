@@ -176,9 +176,6 @@ class Query:
                 relative_version,
             )
 
-            if not records:
-                return False
-
             return records
         except Exception as e:
             self._print_error(e)
@@ -193,9 +190,6 @@ class Query:
                 projected_columns_index,
                 relative_version
             )
-
-            if not records:
-                return False
             
             return records
         except Exception as e:

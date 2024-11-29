@@ -124,12 +124,11 @@ class MergeManager:
 
         for page_id in page_ids:
             # Get all pages associated with page id
-            pages = []
-            for col in range(tcols):
-                page: Page = page_table.get_page(page_id, col)
-                if page is None:
-                    page = disk.get_page(page_id, col)
-                pages.append(page)
+            pages = page_table.get_entry(page_id)
+            with pages:
+                for col in range(tcols):
+                    if pages[col] is None:
+                        pages[col] = disk.get_page(page_id, col)
 
             # Get all rids in page
             rid_page = pages[MetaCol.RID]
