@@ -33,15 +33,6 @@ class PageTableEntry:
 
         self.lock = threading.Lock()
 
-    def __enter__(self):
-        """Context mgr entry for concurrency."""
-        self.lock.acquire()
-        return self
-
-    def __exit__(self, exc_type, exc_val, traceback):
-        """Context mgr exit for concurrency."""
-        self.lock.release()
-    
     def __getitem__(self, index: int) -> Page:
         return self.pages[index]
     

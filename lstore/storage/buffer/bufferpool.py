@@ -58,7 +58,7 @@ class Bufferpool:
 
     def write(self, columns: tuple[int]) -> RID:
         """
-        Writes a new record with the given data columns.
+        Writes a new record w/ the given data columns.
         Marks the page as dirty if modified.
 
         Returns a list of RecordIndex objects to be used as values in the
@@ -70,12 +70,12 @@ class Bufferpool:
         """
         with self.page_table.lock:
             # Create base rid
-            pages_b: PageTableEntry = self._get_pages(True)
+            pages_b: PageTableEntry = self._get_page_entry(True)
             pages_id_b, offset_b = pages_b.get_loc()
             rid: RID = RID.from_params(pages_id_b, offset_b, is_base=1, tombstone=0)
 
             # Create 'tail' rid (copy of base)
-            pages_t: PageTableEntry = self._get_pages(False)
+            pages_t: PageTableEntry = self._get_page_entry(False)
             pages_id_t, offset_t = pages_t.get_loc()
             tail_rid: RID = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=0)
 
@@ -116,7 +116,7 @@ class Bufferpool:
             self._validate_not_deleted(rid, pages_id_b, offset_b)
 
             # Create new RID
-            pages: PageTableEntry = self._get_pages(False)
+            pages: PageTableEntry = self._get_page_entry(False)
             pages_id_t, offset_t = pages.get_loc()
             tail_rid: RID = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=tombstone)
 
@@ -181,7 +181,7 @@ class Bufferpool:
         :param proj_col_idx: List of 0s or 1s indicating which columns to return
         :param rel_version: Relative version to return. 0 is latest, -<n> are prev
 
-        :return: Record with retrieved data in record.columns and base rid
+        :return: Record w/ retrieved data in record.columns and base rid
         """
         pages_id, offset = rid.get_loc()
 
@@ -214,13 +214,13 @@ class Bufferpool:
         """Flushes all pages in bufferpool's page table to the disk."""
         for pages_id in self.page_table:
             pages = self.page_table.get_page_entry(pages_id)
-            with pages:
-                for col in range(self.tcols):
-                    self._flush_page_to_disk(pages[col], pages_id, col)
+
+            for col in range(self.tcols):
+                self._flush_page_to_disk(pages[col], pages_id, col)
 
     # Helpers ------------------------
 
-    def _get_pages(self, is_base):
+    def _get_page_entry(self, is_base) -> PageTableEntry:
         page_tracker = self.base_trackers if is_base else self.tail_trackers
 
         if page_tracker:
@@ -253,12 +253,12 @@ class Bufferpool:
         pages_id, offset = rid.get_loc()
 
         pages = self.page_table.get_page_entry(pages_id)
-        with pages:
-            page = pages[col]
-            self._validate_read_page(page, pages_id, col)
+        
+        page = pages[col]
+        self._validate_read_page(page, pages_id, col)
 
-            page.update(val, offset)
-            page.is_dirty = True
+        page.update(val, offset)
+        page.is_dirty = True
 
     def _read_val(self, col: int, pages_id: int, offset: int):
         """
@@ -266,11 +266,11 @@ class Bufferpool:
         and a page id/offset.
         """
         pages = self.page_table.get_page_entry(pages_id)
-        with pages:
-            page = pages[col]
-            page = self._validate_read_page(page, pages_id, col)
+        
+        page = pages[col]
+        page = self._validate_read_page(page, pages_id, col)
 
-            return page.read(offset)
+        return page.read(offset)
     
     def _validate_read_page(self, page, pages_id, col):
         if page is None:
@@ -339,19 +339,19 @@ class Bufferpool:
         pages_id, col = self.evict_queue.popitem(last=False)[0]
 
         pages = self.page_table.get_page_entry(pages_id)
-        with pages:
-            page = pages[col]
+        
+        page = pages[col]
 
-            if page.pin_count <= 0:
-                is_entry_empty = self.page_table.remove_page(pages_id, col)
+        if page.pin_count <= 0:
+            is_entry_empty = self.page_table.remove_page(pages_id, col)
 
-                # Also remove page from head/page trackers
-                if is_entry_empty:
-                    tracker = self.tail_trackers if pages_id % 2 else self.base_trackers
-                    tracker.pop(pages_id, None)
+            # Also remove page from head/page trackers
+            if is_entry_empty:
+                tracker = self.tail_trackers if pages_id % 2 else self.base_trackers
+                tracker.pop(pages_id, None)
 
-                # Write to disk (will check if dirty)
-                self._flush_page_to_disk(page, pages_id, col)
+            # Write to disk (will check if dirty)
+            self._flush_page_to_disk(page, pages_id, col)
 
     def _flush_page_to_disk(self, page, pages_id, col):
         """Currently writes page to disk."""
