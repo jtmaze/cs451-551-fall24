@@ -120,12 +120,12 @@ class PageTable:
 
         return self.ptable[pages_id]
     
-    def get_page_entry(self, pages_id) -> PageTableEntry:
+    def get_entry(self, pages_id) -> PageTableEntry:
         return self.ptable.get(pages_id, None)
     
     def remove_page(self, pages_id, col) -> bool:
         if pages_id in self.ptable:
-            pages = self.get_page_entry(pages_id)
+            pages = self.get_entry(pages_id)
             is_entry_empty = pages.delete_page(col)
 
             if is_entry_empty:

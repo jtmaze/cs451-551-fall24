@@ -69,33 +69,40 @@ class Bufferpool:
         :return: new RID
         """
         with self.page_table.lock:
-            # Create base rid
-            pages_b: PageTableEntry = self._get_page_entry(True)
-            pages_id_b, offset_b = pages_b.get_loc()
-            rid: RID = RID.from_params(pages_id_b, offset_b, is_base=1, tombstone=0)
+            pages_b = self._get_latest_page_entry(True)
+            pages_t = self._get_latest_page_entry(False)
 
-            # Create 'tail' rid (copy of base)
-            pages_t: PageTableEntry = self._get_page_entry(False)
-            pages_id_t, offset_t = pages_t.get_loc()
-            tail_rid: RID = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=0)
+            pages_b.lock.acquire()
+            pages_t.lock.acquire()
 
-            # Cache buffer
-            new_vals = self._new_vals_buffer
+        # Create base rid
+        pages_id_b, offset_b = pages_b.get_loc()
+        rid: RID = RID.from_params(pages_id_b, offset_b, is_base=1, tombstone=0)
 
-            # Write base record
-            new_vals[MetaCol.INDIR] = int(tail_rid)
-            new_vals[MetaCol.RID] = int(rid)
-            new_vals[MetaCol.SCHEMA] = 0
-            new_vals[len(MetaCol):self.tcols] = columns # All data columns
-            pages_b.write_vals(new_vals)
+        # Create 'tail' rid (copy of base)
+        pages_id_t, offset_t = pages_t.get_loc()
+        tail_rid: RID = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=0)
 
-            # Write first tail record (copy of base record)
-            new_vals[MetaCol.INDIR] = 0
-            new_vals[MetaCol.RID] = int(tail_rid)
-            pages_t.write_vals(new_vals)
+        # Cache buffer
+        new_vals = self._new_vals_buffer
 
-            # Return new base rid for index
-            return rid
+        # Write base record
+        new_vals[MetaCol.INDIR] = int(tail_rid)
+        new_vals[MetaCol.RID] = int(rid)
+        new_vals[MetaCol.SCHEMA] = 0
+        new_vals[len(MetaCol):self.tcols] = columns # All data columns
+        pages_b.write_vals(new_vals)
+
+        # Write first tail record (copy of base record)
+        new_vals[MetaCol.INDIR] = 0
+        new_vals[MetaCol.RID] = int(tail_rid)
+        pages_t.write_vals(new_vals)
+
+        pages_t.lock.release()
+        pages_b.lock.release()
+
+        # Return new base rid for index
+        return rid
 
     def update(self, rid: RID, tombstone: Literal[0, 1], columns: tuple[int | None]):
         """
@@ -110,62 +117,68 @@ class Bufferpool:
         :param tombstone: Value of tombstone flag (0 if updating, 1 if deleting)
         :param columns: New data values. Vals are none if no update for that col
         """
+        pages_id_b, offset_b = rid.get_loc()
+        self._validate_not_deleted(rid, pages_id_b, offset_b)
+
         with self.page_table.lock:
-            pages_id_b, offset_b = rid.get_loc()
+            pages_b = self.page_table.get_entry(pages_id_b)
+            pages_t = self._get_latest_page_entry(False)
 
-            self._validate_not_deleted(rid, pages_id_b, offset_b)
+            pages_b.lock.acquire()
+            pages_t.lock.acquire()
 
-            # Create new RID
-            pages: PageTableEntry = self._get_page_entry(False)
-            pages_id_t, offset_t = pages.get_loc()
-            tail_rid: RID = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=tombstone)
+        # Create new RID
+        pages_id_t, offset_t = pages_t.get_loc()
+        tail_rid = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=tombstone)
 
-            # Cache for performance
-            _read_val_cached = self._read_val
+        # Cache for performance
+        _read_val_cached = self._read_val
+        new_vals = self._new_vals_buffer
 
-            new_vals = self._new_vals_buffer
+        # Indirection -----------------
 
-            # Indirection -----------------
+        # Set new tail indir to prev tail rid and base indir to new rid
+        indir_rid = RID(_read_val_cached(MetaCol.INDIR, pages_id_b, offset_b))
+        new_vals[MetaCol.INDIR] = int(indir_rid)
+        self._overwrite_val(MetaCol.INDIR, rid, tail_rid, pages_b)
 
-            # Set new tail indir to prev tail rid and base indir to new rid
-            indir_rid = RID(_read_val_cached(MetaCol.INDIR, pages_id_b, offset_b))
-            new_vals[MetaCol.INDIR] = int(indir_rid)
-            self._overwrite_val(MetaCol.INDIR, rid, tail_rid)
+        # RID ----------- -------------
 
-            # RID ----------- -------------
+        new_vals[MetaCol.RID] = int(tail_rid)
 
-            new_vals[MetaCol.RID] = int(tail_rid)
+        # Schema encoding & data ------
 
-            # Schema encoding & data ------
+        # Get record indices for previous tail record
+        pages_id_i, offset_i = indir_rid.get_loc()
 
-            # Get record indices for previous tail record
-            pages_id_i, offset_i = indir_rid.get_loc()
+        # Get latest schema encoding (go to latest tail if recently merged)
+        schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_b, offset_b)
+        # If latest tail record previously merged into base record
+        if schema_encoding == -1:  
+            schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_i, offset_i)
 
-            # Get latest schema encoding (go to latest tail if recently merged)
-            schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_b, offset_b)
-            # If latest tail record previously merged into base record
-            if schema_encoding == -1:  
-                schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_i, offset_i)
+        # Go through columns while updating schema encoding and data
+        metalen = len(MetaCol)
+        for data_col, val in enumerate(columns):
+            real_col = metalen + data_col
 
-            # Go through columns while updating schema encoding and data
-            metalen = len(MetaCol)
-            for data_col, val in enumerate(columns):
-                real_col = metalen + data_col
+            if val is None:
+                # Get previous value if cumulative
+                val = _read_val_cached(real_col, pages_id_i, offset_i)
+            else:
+                # Update schema by setting appropriate bit to 1
+                schema_encoding |= (1 << data_col)
 
-                if val is None:
-                    # Get previous value if cumulative
-                    val = _read_val_cached(real_col, pages_id_i, offset_i)
-                else:
-                    # Update schema by setting appropriate bit to 1
-                    schema_encoding |= (1 << data_col)
+            new_vals[real_col] = val
 
-                new_vals[real_col] = val
+        # Write both base and new tail record schema encoding
+        new_vals[MetaCol.SCHEMA] = schema_encoding
+        self._overwrite_val(MetaCol.SCHEMA, rid, schema_encoding, pages_b)
 
-            # Write both base and new tail record schema encoding
-            new_vals[MetaCol.SCHEMA] = schema_encoding
-            self._overwrite_val(MetaCol.SCHEMA, rid, schema_encoding)
+        pages_t.write_vals(new_vals)
 
-            pages.write_vals(new_vals)
+        pages_t.lock.release()
+        pages_b.lock.release()
 
     def read(
             self,
@@ -210,22 +223,47 @@ class Bufferpool:
 
         return Record(self.table.key, columns, rid)
 
+    def restore(self, rid: RID):
+        """
+        Restores a deleted record by resetting the tombstone flag.
+        :param rid: RID of the record to restore
+        """
+        try:
+            pages_id, offset = rid.get_loc()
+            page = self.page_table.get_page(pages_id, MetaCol.INDIR)
+            if page is None:
+                page = self.fetch_page(pages_id)
+
+            # Read the current indirection value
+            record_val = RID(self._read_val(MetaCol.INDIR, pages_id, offset))
+            if record_val.tombstone == 1:
+                # Reset tombstone flag
+                restored_val = RID.from_params(
+                    record_val.pages_id, record_val.pages_offset, is_base=record_val.is_base, tombstone=0
+                )
+                self._overwrite_val(MetaCol.INDIR, rid, int(restored_val))
+                print(f"Record {rid} restored successfully.")
+            else:
+                print(f"Record {rid} is not marked as deleted.")
+        except Exception as e:
+            print(f"Error restoring record {rid}: {e}")
+
     def flush_to_disk(self):
         """Flushes all pages in bufferpool's page table to the disk."""
         for pages_id in self.page_table:
-            pages = self.page_table.get_page_entry(pages_id)
+            pages = self.page_table.get_entry(pages_id)
 
             for col in range(self.tcols):
                 self._flush_page_to_disk(pages[col], pages_id, col)
 
     # Helpers ------------------------
 
-    def _get_page_entry(self, is_base) -> PageTableEntry:
+    def _get_latest_page_entry(self, is_base) -> PageTableEntry:
         page_tracker = self.base_trackers if is_base else self.tail_trackers
 
         if page_tracker:
             pages_id = next(reversed(page_tracker))
-            pages: PageTableEntry = self.page_table.get_page_entry(pages_id)
+            pages: PageTableEntry = self.page_table.get_entry(pages_id)
         else:
             pages = None
 
@@ -246,16 +284,14 @@ class Bufferpool:
 
         return pages
     
-    def _overwrite_val(self, col:int, rid: RID, val: int):
-        """
-        Overwrites a value in a page, marking it as dirty.
-        """
+    def _overwrite_val(self, col: int, rid, val: int, pages=None):
         pages_id, offset = rid.get_loc()
 
-        pages = self.page_table.get_page_entry(pages_id)
+        if pages is None:
+            pages = self.page_table.get_page_entry(pages_id)
         
         page = pages[col]
-        self._validate_read_page(page, pages_id, col)
+        self._get_page_in_memory(page, pages_id, col)
 
         page.update(val, offset)
         page.is_dirty = True
@@ -265,14 +301,15 @@ class Bufferpool:
         Reads a value from a page given a column (including metadata cols)
         and a page id/offset.
         """
-        pages = self.page_table.get_page_entry(pages_id)
-        
-        page = pages[col]
-        page = self._validate_read_page(page, pages_id, col)
+        pages = self.page_table.get_entry(pages_id)
 
-        return page.read(offset)
-    
-    def _validate_read_page(self, page, pages_id, col):
+        with pages.lock:
+            page = pages[col]
+            page = self._get_page_in_memory(page, pages_id, col)
+
+            return page.read(offset)
+
+    def _get_page_in_memory(self, page, pages_id, col):
         if page is None:
             page = self._fetch_page_from_disk(pages_id, col)
 
@@ -322,7 +359,7 @@ class Bufferpool:
         page = disk.get_page(pages_id, col)
         
         # Populate page table entry
-        pages: PageTableEntry = self.page_table.get_page_entry(pages_id)
+        pages: PageTableEntry = self.page_table.get_entry(pages_id)
         if pages is None:
             pages = self.page_table.init_pages(pages_id, page.offset)
         pages.add_page(page, col)
@@ -338,7 +375,7 @@ class Bufferpool:
         # Remove location of page to evict from queue
         pages_id, col = self.evict_queue.popitem(last=False)[0]
 
-        pages = self.page_table.get_page_entry(pages_id)
+        pages = self.page_table.get_entry(pages_id)
         
         page = pages[col]
 
@@ -357,28 +394,3 @@ class Bufferpool:
         """Currently writes page to disk."""
         if page is not None and page.is_dirty:
             self.table.disk.add_page(page, pages_id, col)
-
-    def restore(self, rid: RID):
-        """
-        Restores a deleted record by resetting the tombstone flag.
-        :param rid: RID of the record to restore
-        """
-        try:
-            pages_id, offset = rid.get_loc()
-            page = self.page_table.get_page(pages_id, MetaCol.INDIR)
-            if page is None:
-                page = self.fetch_page(pages_id)
-
-            # Read the current indirection value
-            record_val = RID(self._read_val(MetaCol.INDIR, pages_id, offset))
-            if record_val.tombstone == 1:
-                # Reset tombstone flag
-                restored_val = RID.from_params(
-                    record_val.pages_id, record_val.pages_offset, is_base=record_val.is_base, tombstone=0
-                )
-                self._overwrite_val(MetaCol.INDIR, rid, int(restored_val))
-                print(f"Record {rid} restored successfully.")
-            else:
-                print(f"Record {rid} is not marked as deleted.")
-        except Exception as e:
-            print(f"Error restoring record {rid}: {e}")

@@ -124,7 +124,7 @@ class MergeManager:
 
         for page_id in page_ids:
             # Get all pages associated with page id
-            pages = page_table.get_page_entry(page_id)
+            pages = page_table.get_entry(page_id)
             with pages:
                 for col in range(tcols):
                     if pages[col] is None:
