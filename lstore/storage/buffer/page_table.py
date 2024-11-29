@@ -29,7 +29,7 @@ class PageTableEntry:
         self.page_count = 0
         
         # Offset in bytes, ie how many bytes are occupied by each page
-        self.offset = PageTableEntry.record_size if offset is None else offset
+        self.offset = Page.header_size
 
         self.lock = threading.Lock()
 
@@ -112,9 +112,9 @@ class PageTable:
 
         return pages, pages_id
     
-    def init_pages(self, pages_id, offset) -> PageTableEntry:
+    def init_pages(self, pages_id) -> PageTableEntry:
         # Create page entry with no pages (filled with None)
-        page_entry = PageTableEntry(pages_id, self.tcols, offset=offset)
+        page_entry = PageTableEntry(pages_id, self.tcols)
 
         self.ptable[pages_id] = page_entry
 

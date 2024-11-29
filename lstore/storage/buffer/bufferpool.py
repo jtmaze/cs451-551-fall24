@@ -291,13 +291,15 @@ class Bufferpool:
         if pages is None:
             pages = self.page_table.get_entry(pages_id)
             if pages is None:
-                pages = self.page_table.init_pages(pages_id, page.offset)
+                pages = self.page_table.init_pages(pages_id)
 
         with pages.lock:
             # Get page (from disk if necessary)
             page = pages[col]
             if page is None:
                 page = self._get_page_from_disk(pages, pages_id, col)
+            
+            pages.offset = page.offset
 
             page = self._update_evict_queue(page, pages_id, col)
 
@@ -312,13 +314,15 @@ class Bufferpool:
         # Get page entry (create empty one if needed)
         pages = self.page_table.get_entry(pages_id)
         if pages is None:
-            pages = self.page_table.init_pages(pages_id, page.offset)
+            pages = self.page_table.init_pages(pages_id)
 
         with pages.lock:
             # Get page (from disk if necessary)
             page = pages[col]
             if page is None:
                 page = self._get_page_from_disk(pages, pages_id, col)
+
+            pages.offset = page.offset
 
             self._update_evict_queue(pages_id, col)
 
