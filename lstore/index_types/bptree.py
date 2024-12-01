@@ -1,4 +1,3 @@
-# %%
 import math
 
 import threading
@@ -179,6 +178,11 @@ class BPTree:
             low_leaf = next_leaf_pointer
 
         return results
+    
+    def scan_all_leafs(self):
+        """Starts at left-most leaf stores all keys and values in linked-list"""
+
+
 
 ### B+ Tree Implementation
 class BPTreeIndex(IndexType):

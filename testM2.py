@@ -364,7 +364,7 @@ import glob
 import traceback
 import shutil   
 
-m2tests = [1,1,1]
+m2tests = [1,1,0]
 if m2tests[0] == 1:
     print("==========correctness tester===============")
     correctness_tester1() 

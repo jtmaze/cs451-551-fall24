@@ -114,5 +114,23 @@
             "args": [
             ]
         },
+        {
+            "name": "testM1",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/testM1.py",
+            "console": "integratedTerminal",
+            "args": [
+            ]
+        },
+        {
+            "name": "testM2",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/testM2.py",
+            "console": "integratedTerminal",
+            "args": [
+            ]
+        },
     ]
 }

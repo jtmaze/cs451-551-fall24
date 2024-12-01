@@ -94,18 +94,18 @@ class Index:
         index = self.indices[col_number]
 
         # if index is not None and (is_prim_key or isinstance(index, BPTreeIndex)):
-        if index is not None and isinstance(index, BPTreeIndex):
+        if index is not None:
             index.insert(val, rid)
         else:
-            raise TypeError(f"Invalid index type: type({type(index)})")
+            raise TypeError(f"Inserting value {val} into nonexistent index (col {col_number})")
         
     def update_val(self, col_number, old_val, new_val, rid):
         index = self.indices[col_number]
 
-        if index is not None and isinstance(index, BPTreeIndex):
+        if index is not None:
             index.update(old_val, new_val, rid)
         else:
-            raise TypeError(f"Invalid index type: type({type(index)})")
+            raise TypeError(f"Updating value {old_val}->{new_val} for nonexistent index (col {col_number})")
 
 
 
@@ -114,13 +114,12 @@ class Index:
     def _populate_index(self, col_number):
         """Goes through already data in column and populates index."""
         pass
-        # Assuming that the table is accessible through a reference (e.g., self.table)
-        # for rid, record in enumerate(self.table_data()):  # Replace with actual record retrieval method
-        #     column_value = record.columns[column_number]
-        #     if column_value in self.indices[column_number]:
-        #         self.indices[column_number][column_value].append(rid)
-        #     else:
-        #         self.indices[column_number][column_value] = [rid]
+        # primary_keys, rids = self.index[col_number].linear_scan()
+        # proj_idx = [1 if i == col_number else 0 for i in range(self.num_cols)]
+        #
+        # for primary_key in primary_keys:
+        #     self.table.select(primary_key, self.table.key, proj_idx)
+        #     insert val/rid into index
 
 
     #new_______________for reconstructing index

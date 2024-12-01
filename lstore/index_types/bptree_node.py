@@ -71,17 +71,18 @@ class BPTreeNode:
                 if key_delete == current_keys[i]:
                     try:
                         current_values[i].remove(value_delete)
-                        print(f'Key {key_delete}, Value {value_delete} removed')
+                        #print(f'Key {key_delete}, Value {value_delete} removed')
                         if current_keys[i] == 0:
                             del current_keys[i]
                             del current_values[i]
-                            print(f'Key {key_delete} is empty, no more vals')
+                            #print(f'Key {key_delete} is empty, no more vals')
                         break
                     except ValueError:
                         print(f'Value {value_delete}, not found in leaf node')
                         break
         else:
-            print(f'Key {key_delete} not found in leaf node')
+            pass
+            # print(f'Key {key_delete} not found in leaf node')
         
 
     def point_query_node(self, search_key):
