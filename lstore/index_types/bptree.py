@@ -179,8 +179,28 @@ class BPTree:
 
         return results
     
-    def scan_all_leafs(self):
-        """Starts at left-most leaf stores all keys and values in linked-list"""
+        def scan_all_leafs(self):
+            """
+            Starts at left-most leaf and scans all leaf nodes using forward pointers
+            Returns: Linked list of all keys and values in leaf node
+            """
+            results = []
+
+            # 1. Find the left-most (lowest) leaf node
+            current_node = self.root
+            while not current_node.is_leaf:
+                if not current_node.values:
+                    break # Error handling for empty tree
+                current_node = current_node.values[0] # Always take the first child
+
+            # 2. Traverse leaf nodes using forward pointers
+            while current_node:
+                for key, vals in zip(current_node.keys, current_node.values):
+                    for val in vals:
+                        results.append((key, val))
+                current_node = current_node.forward_key
+
+            return results
 
 
 
@@ -229,6 +249,14 @@ class BPTreeIndex(IndexType):
     def update(self, val, new_val, rid):
         self.delete(val, rid)
         self.insert(new_val, rid)
+
+    def scan_all(self):
+        """
+        Obtains all key/value pairs in the entire tree
+        May need to use batching with large data
+        """
+        results = self.tree.scan_all_leafs()
+        return results
 
     def clear(self):
         self.tree = BPTree(n=self.n)
