@@ -84,14 +84,6 @@ class Buffer:
             rid, 1, tuple(None for _ in range(self.table.num_columns)))
         # for rollback(transaction.py)
 
-    def update_record(self, rid: RID, columns: tuple[int | None]):
-        """
-        Updates data record by adding a tail record with the data in columns.
-        :param rid: Base RID
-        :param columns: New data values
-        """
-        self.bufferpool.update(rid, 0, columns)
-
     def restore_record(self, rid: RID):
         """
         Restores a deleted record by resetting its tombstone flag.

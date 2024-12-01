@@ -42,6 +42,10 @@ if "%Test%"=="main" (
     py .\exam_tester_m3_part1.py > "%OutputDir%\exam_tester_m3_part1.txt"
 ) else if "%Test%"=="exam32" (
     py .\exam_tester_m3_part2.py > "%OutputDir%\exam_tester_m3_part2.txt"
+) else if "%Test%"=="test2" (
+    rmdir /s /q .\CT\
+    rmdir /s /q .\M2\
+    py .\testM2.py > "%OutputDir%\testM2.txt"
 ) else (
     echo Unknown command: %Test%
     exit /b 1

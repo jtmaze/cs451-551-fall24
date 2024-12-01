@@ -22,7 +22,7 @@ class IndexType(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def delete(self, val):
+    def delete(self, val, rid):
         raise NotImplementedError()
 
     @abstractmethod

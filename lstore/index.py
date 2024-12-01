@@ -95,11 +95,18 @@ class Index:
 
         # if index is not None and (is_prim_key or isinstance(index, BPTreeIndex)):
         if index is not None and isinstance(index, BPTreeIndex):
-            index.insert(val, rid)  # B+ Tree
-        elif index is not None and isinstance(index, DictIndex):
-            index.insert(rid, val)  # Dictionary
+            index.insert(val, rid)
         else:
             raise TypeError(f"Invalid index type: type({type(index)})")
+        
+    def update_val(self, col_number, old_val, new_val, rid):
+        index = self.indices[col_number]
+
+        if index is not None and isinstance(index, BPTreeIndex):
+            index.update(old_val, new_val, rid)
+        else:
+            raise TypeError(f"Invalid index type: type({type(index)})")
+
 
 
     # Helper ---------------------

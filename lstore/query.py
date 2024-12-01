@@ -39,7 +39,7 @@ class Query:
                 )
                 self.transaction_context.log_delete(rid, record)
 
-            self.table.delete(rid)
+            self.table.delete(rid, primary_key)
             return True
         except Exception as e:
             self._print_error(e)

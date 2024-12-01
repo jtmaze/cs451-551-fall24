@@ -106,8 +106,10 @@ class Table:
         :param columns: New data values
         """
         try:
+            primary_key = columns[self.key]
+
             # Check if primary key exists (raises error if not)
-            self._validate_primary_key_insert(columns)
+            self._validate_primary_key_insert(primary_key)
 
             # Insert a record, buffer will return its new RID
             rid = self.buffer.insert_record(columns)
@@ -176,7 +178,7 @@ class Table:
 
         return records
 
-    def update(self, rid: RID, columns: tuple[int], primary_key):
+    def update(self, rid: RID, columns: tuple[int], primary_key: int):
         """
         Updates the record with the given RID. This updates the base record's
         schema encoding and indirection pointer to point to the latest tail
@@ -184,9 +186,33 @@ class Table:
 
         :param rid: RID of base record to update
         :param columns: New data values
+        :param primary_key: Primary key VALUE, not column index
         """
         try:
+            # Check that primary key exists
             self._validate_primary_key_update(primary_key)
+
+            # Get old values to delete from indexes
+            proj_idx = [1 if columns[i] is not None else 0 for i in range(len(columns))]
+            old_values = self.select(primary_key, self.key, proj_idx)[0] # Primary key and already validated
+            old_values = old_values.columns
+
+            # Update primary and secondary indexes for all updated values
+            old_idx = 0
+            for new_idx, proj in enumerate(proj_idx):
+                # If value is being updated
+                if proj == 1:
+                    new_value = columns[new_idx]
+                    old_value = old_values[old_idx]
+                    old_idx += 1
+
+                    # Ensure new primary key doesn't already exist if needed
+                    if new_idx == self.key:
+                        self._validate_primary_key_insert(new_value)
+                    
+                    # Delete current and insert new primary key into index
+                    self.index.update_val(new_idx, old_value, new_value, rid)
+
             self.buffer.update_record(rid, columns)
 
             self.num_updates += 1
@@ -239,10 +265,9 @@ class Table:
 
     # Helpers ------------------------------------------------
 
-    def _validate_primary_key_insert(self, columns):
-        primary_key = columns[self.key]
-
+    def _validate_primary_key_insert(self, primary_key):
         if self.index.locate(self.key, primary_key):
+            # If primary key exists but was deleted, remove from tracker and allow
             if primary_key in self.delete_tracker:
                 self.delete_tracker.discard(primary_key)
                 return

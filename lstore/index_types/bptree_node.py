@@ -59,24 +59,29 @@ class BPTreeNode:
                 #print(f'Key:{key_insert} and RID:{value_insert} inserted on leaf node')
                 return
             
-    def leaf_delete(self, leaf, key_delete):
+    def leaf_delete(self, leaf, key_delete, value_delete):
 
-        """Deletes a specific key and its valuesfrom a leaf node"""
-        
+        """Deletes a specific value from the leaf node"""
+
         current_keys = self.keys
         current_values = self.values
 
         if self.is_leaf:
             for i in range(len(current_keys)):
                 if key_delete == current_keys[i]:
-                    del current_keys[i]
-                    del current_values[i]
-                    #print(f'Key: {key_delete} deleted')
-                    return
-                
-            if config.DEBUG_PRINT:
-                pass
-                #print(f'Key {key_delete} not found')
+                    try:
+                        current_values[i].remove(value_delete)
+                        print(f'Key {key_delete}, Value {value_delete} removed')
+                        if current_keys[i] == 0:
+                            del current_keys[i]
+                            del current_values[i]
+                            print(f'Key {key_delete} is empty, no more vals')
+                        break
+                    except ValueError:
+                        print(f'Value {value_delete}, not found in leaf node')
+                        break
+        else:
+            print(f'Key {key_delete} not found in leaf node')
         
 
     def point_query_node(self, search_key):

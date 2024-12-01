@@ -34,12 +34,12 @@ class BPTree:
         if len(leaf_node.keys) > self.n - 1: # 3) If full, split the node
             self.split_node(leaf_node)
 
-    def delete(self, key_delete):
+    def delete(self, key_delete, value_delete):
         """
         TODO: Implement for persistent memory
         """
         leaf_node = self.search_node(key_delete)
-        leaf_node.leaf_delete(leaf_node, key_delete)
+        leaf_node.leaf_delete(leaf_node, key_delete, value_delete)
         
         if len(leaf_node.keys) < math.ceil(self.n / 2):
             print('UGHHH doing rebalancing later')
@@ -215,11 +215,16 @@ class BPTreeIndex(IndexType):
         with self.tree.lock:
             self.tree.insert(val, rid)
 
-    def delete(self, val):
+    def delete(self, val, rid):
         """
         !!! Values will be deleted from leafs, but tree won't rebalance yet.
         """
-        self.tree.delete(val)
+        with self.tree.lock:
+            self.tree.delete(val, rid)
+
+    def update(self, val, new_val, rid):
+        self.delete(val, rid)
+        self.insert(new_val, rid)
 
     def clear(self):
         self.tree = BPTree(n=self.n)
