@@ -41,9 +41,18 @@ class Index:
         """
         # returns the location of all records with the given value on column "column"
         """
+        # If no index, perform linear scan
         if self.indices[column] is None:
-            # If no index exists, return an empty list
-            return []
+            key_rids_pairs = self.indices[self.key].scan_all()
+            proj_idx = [1 if i == column else 0 for i in range(self.table.num_columns)]
+
+            rids = []
+            for primary_key, rid in key_rids_pairs:
+                vals = self.table.select(primary_key, self.table.key, proj_idx)[0]
+                if vals.columns[0] == value:
+                    rids.append(rid)
+
+            return rids
 
         # If an index exists, use it to look up the RIDs
         return self.indices[column].get(value)
@@ -113,14 +122,14 @@ class Index:
 
     def _populate_index(self, col_number):
         """Goes through already data in column and populates index."""
-        pass
-        # primary_keys, rids = self.index[col_number].linear_scan()
-        # proj_idx = [1 if i == col_number else 0 for i in range(self.num_cols)]
-        #
-        # for primary_key in primary_keys:
-        #     self.table.select(primary_key, self.table.key, proj_idx)
-        #     insert val/rid into index
+        key_rids_pairs = self.indices[self.key].scan_all()
 
+        index = self.indices[col_number]
+        proj_idx = [1 if i == col_number else 0 for i in range(self.table.num_columns)]
+
+        for primary_key, rid in key_rids_pairs:
+            vals = self.table.select(primary_key, self.table.key, proj_idx)[0]
+            index.insert(vals.columns[0], rid)
 
     #new_______________for reconstructing index
     def clear(self):
