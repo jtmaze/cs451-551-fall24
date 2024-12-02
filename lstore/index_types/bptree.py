@@ -41,7 +41,7 @@ class BPTree:
         leaf_node.leaf_delete(leaf_node, key_delete, value_delete)
         
         if len(leaf_node.keys) < math.ceil(self.n / 2):
-            print('UGHHH doing rebalancing later')
+            #print('UGHHH doing rebalancing later')
 
 
 

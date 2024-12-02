@@ -78,7 +78,7 @@ class BPTreeNode:
                             #print(f'Key {key_delete} is empty, no more vals')
                         break
                     except ValueError:
-                        print(f'Value {value_delete}, not found in leaf node')
+                        #print(f'Value {value_delete}, not found in leaf node')
                         break
         else:
             pass
