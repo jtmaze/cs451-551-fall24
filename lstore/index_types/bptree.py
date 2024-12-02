@@ -218,7 +218,7 @@ class BPTreeIndex(IndexType):
                 return []
             else:
                 # Return the latest inserted value in a list
-                return [values[-1]]
+                return values
         
     def get_range_val(self, begin, end):
         """
