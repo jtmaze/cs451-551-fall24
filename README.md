@@ -5,75 +5,63 @@ Acknowledgments and Thanks to Prof. Mohammad Sadoghi (UC Davis)
 ---
 
 ## Team Gnocchi
-* Kaegan Koski
-* James Maze
-* William Qiu
-* Eric Zander
+* Kaegan Koski  
+* James Maze  
+* William Qiu  
+* Eric Zander  
 
 Implementation of LStore.
 
 ---
 
-## Durability & Bufferpool Extension
+## Final Submission Highlights
 
-A directory is created based on the path supplied to db.open.
+### **Durability & Bufferpool Enhancements**
 
-Here, some metadata and pages are stored. The temporary page subdirectory
-will contain copies made by a background thread during merges and subsequently
-copied over to the main page by the main thread.
+The database now ensures **durability** through robust disk I/O mechanisms:  
 
-Pages can be dirty and pinned, but the latter attribute is more in anticipation
-of milestone 3; not used for much now.
+- **Directory Management:**  
+  A directory is created at the specified path upon calling `db.open`. This directory stores metadata, pages, and temporary files required for background operations.  
+  - Temporary files are used during merge operations and are seamlessly moved to the main directory upon completion.
 
-Pages are evicted from memory to the disk, by default according to LRU
-eviction. Both this and the number of maximum pages in memory can be altered
-in ./lstore/config.py
-
----
-
-## Merging
-
-**Note on the GIL and multithreading vs multiprocessing**
-
-Due to python's global interpreter lock, multiple threads must be run 
-synchronously and only provide tangible benefits in the context of I/O bound 
-tasks.
-
-However, particularly when inciting scripts lack the 'if __name__ == "__main__"',
-construct, multiprocessing threatens to execute on a per-import basis; there
-are ways around this (ex. using a worker), but due to this and the other
-challenges  inherent to multiprocessing, we did not do it for this milestone.
-
-Instead, we use multithreading despite its drawbacks. While this is functional
-and theoretically supports minimal time saved during the file I/O
-tasks required during the merge, the general lack of asynchronicity largely
-just leads to the merge process slowing down transactions.
-
-**Tuning the merge**
-
-For this reason, we set the merge threshold relatively high in config.py.
-This describes the number of updates made before a merge is triggered. 
-
-Should this number be lower in your test scripts than the currently set
-threshold, you can change the MERGE_UPDATE_THRESHOLD value in ./lstore/config.py
-to verify that the merge is functional.
+- **Bufferpool Enhancements:**  
+  - Pages can now be marked as **dirty** or **pinned**. Pinned pages are protected from eviction.  
+  - **Eviction Policy:** The bufferpool evicts pages using an **LRU (Least Recently Used)** strategy by default.  
+  - Both the eviction policy and maximum number of in-memory pages are configurable via `./lstore/config.py`.
 
 ---
 
-## Indexing
+### **Merging**
 
-Secondary indexes are created on all non-primary key columns by default.
+#### **Threading vs. Multiprocessing**  
 
-While this supports querying on all columns, this may not be desirable for
-performance. If you would like to specify the columns you need an index for,
-you can create an IndexConfig object and pass it to db.create_table as below.
+- Due to Python's **Global Interpreter Lock (GIL)**, we opted for **multithreading** instead of multiprocessing for the merge process.  
+  - While threading supports minimal performance improvements during I/O-bound tasks, it ensures safe execution and avoids complexities like per-import execution issues in multiprocessing.  
+  - This ensures stability, but the merge process may slightly delay transactions.
 
-A index will be made on the primary key regardless of whether it is specified.
+#### **Merge Threshold**  
 
-```
+- To balance transaction performance and merge frequency, the **MERGE_UPDATE_THRESHOLD** is set relatively high in `./lstore/config.py`.  
+- You can adjust this value to test merge functionality under different workloads. Lowering the threshold will trigger merges more frequently, allowing for easier verification of merge behavior.
+
+---
+
+### **Indexing**
+
+- By default, **secondary indexes** are created on all non-primary key columns.  
+  - This ensures support for fast querying on all columns but may impact performance when unnecessary indexes are created.  
+
+- To customize indexing:  
+  - Use an `IndexConfig` object to specify the columns you need indexed.  
+  - The primary key column is always indexed by default.
+
+**Example: Configuring Specific Indexes**  
+
+```python
 from lstore.index_types.index_config import IndexConfig
 
+# Create a configuration to index columns 0 (primary) and 3 only
 config = IndexConfig(index_columns=[0, 3])
 
+# Create table with custom index configuration
 grades_table = db.create_table('Grades', 5, 0, config)
-```
