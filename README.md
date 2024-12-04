@@ -5,7 +5,6 @@ Acknowledgments and Thanks to Prof. Mohammad Sadoghi (UC Davis)
 ---
 
 ## Team Gnocchi
-* Kaegan Koski  
 * James Maze  
 * William Qiu  
 * Eric Zander  
@@ -65,3 +64,55 @@ config = IndexConfig(index_columns=[0, 3])
 
 # Create table with custom index configuration
 grades_table = db.create_table('Grades', 5, 0, config)
+```
+
+### **Transactions & Logging**
+Transactions adhere to ACID (Atomicity, Consistency, Isolation, Durability) principles:
+
+#### **Features**
+- **Atomicity:**
+  - All queries within a transaction succeed or are rolled back completely in case of failure.
+
+- **Rollback Support:**
+  -Updates and deletes are logged to enable rollback during transaction failure.
+  -Update logs store original column values, while delete logs store full records for restoration.
+
+- **Logging Mechanism:**
+  - Logs are maintained during the transaction lifecycle and cleared automatically upon successful commit.
+
+- **Transaction Worker:**
+  - Enables concurrent execution of multiple transactions using multithreading.
+  - Tracks the number of committed transactions and provides statistics for debugging or optimization.
+
+**Example Usage**
+```python
+from lstore.transaction import Transaction
+from lstore.query import Query
+
+# Begin a transaction
+transaction = Transaction()
+
+# Add a query
+transaction.add_query(query.update, grades_table, primary_key, *updated_columns)
+
+# Run the transaction
+if not transaction.run():
+    print("Transaction failed and rolled back.")
+else:
+    print("Transaction committed successfully.")
+```
+
+### **Testing & Validation**
+- Comprehensive unittests are provided to verify core functionalities, including:
+  - Table creation, insertion, selection, updating, and deletion.
+  - Merge operations and bufferpool eviction. 
+  - Index reconstruction and transaction rollback scenarios.
+- Tests cover edge cases such as:
+  - Duplicate primary key insertion.
+  - Out-of-range queries.
+  - Transaction conflicts.
+
+### **Final Notes**
+This submission represents a robust and functional implementation of LStore, balancing functionality, performance, and modularity. Configuration parameters can be easily adjusted to suit various testing environments and workloads.
+
+**We hope this system demonstrates our understanding of database design principles and our ability to implement them in practice.**
