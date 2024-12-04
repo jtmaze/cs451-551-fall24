@@ -3,6 +3,8 @@ import json
 from lstore.table import Table
 import os
 
+from lstore import config
+
 from lstore.storage.rid import RID
 from lstore.storage.buffer.page_table import PageTable
 
@@ -74,7 +76,9 @@ class Database():
         metadata_path = os.path.join(self.path, self.metadata_file)
         with open(metadata_path, 'w') as meta_file:
             json.dump(metadata, meta_file)
-        print("Metadata saved successfully.")
+
+        if config.DEBUG_PRINT:
+            print("Metadata saved successfully.")
 
     def _restore_table(self, name, table_info):
         """
@@ -92,7 +96,8 @@ class Database():
         # Reconstruct the index
         table.reconstruct_index(table_info.get("index_cols"))
 
-        print(f"Restored and indexed table '{name}' with {num_columns} columns.")
+        if config.DEBUG_PRINT:
+            print(f"Restored and indexed table '{name}' with {num_columns} columns.")
 
     def _set_uid_gen_path(self):
         RID.initialize_uid_gen(self.path)

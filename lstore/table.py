@@ -78,7 +78,8 @@ class Table:
         """
         Rebuilds the index from the existing data in the table's base pages.
         """
-        print(f"Reconstructing index for table '{self.name}'...")
+        if config.DEBUG_PRINT:
+            print(f"Reconstructing index for table '{self.name}'...")
         self.index.clear()  # Clear existing indices
 
         # Scan all base records and insert them into the index
@@ -93,7 +94,8 @@ class Table:
         for col_index, records in records_by_column.items():
             self.index.bulk_insert(col_index, records)
 
-        print(f"Index reconstruction completed for table '{self.name}'.")
+        if config.DEBUG_PRINT:
+            print(f"Index reconstruction completed for table '{self.name}'.")
 
     # Core operations ----------------------
 

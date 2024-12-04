@@ -7,6 +7,8 @@ this object.
 Indices are usually B-Trees, but other data structures can be used as well.
 """
 
+from lstore import config
+
 from lstore.index_types.index_config import IndexConfig
 
 from lstore.index_types.bptree import BPTreeIndex
@@ -114,7 +116,8 @@ class Index:
         if index is not None:
             index.update(old_val, new_val, rid)
         else:
-            raise TypeError(f"Updating value {old_val}->{new_val} for nonexistent index (col {col_number})")
+            if config.DEBUG_PRINT:
+                print(f"Tried updating value {old_val}->{new_val} for nonexistent index (col {col_number})")
 
 
 
