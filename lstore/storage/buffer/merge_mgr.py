@@ -18,22 +18,17 @@ Steps to the Merge Algorithm as we're implementing it:
     - Is this a question of how many committed tail records we fetch in each batch??
 
 """
-from collections import namedtuple
 from collections import defaultdict
 
 import os
 import shutil
-import time # For how often we shold merge. 
 
 from lstore import config
 
 from lstore.page import Page
-from lstore.storage.buffer.bufferpool import Bufferpool
 from lstore.storage.disk import Disk
-from lstore.storage.buffer.buffer import Buffer
 from lstore.storage.rid import RID
 
-from lstore.storage.record import Record
 from lstore.storage.buffer.page_table import PageTable
 
 from lstore.storage.meta_col import MetaCol
@@ -79,7 +74,7 @@ class MergeManager:
 
     def finalize_merge(self, merge_future):
         page_path = os.path.join(self.table.db_path, "pages/")
-        temp_path = os.path.join(page_path, "temp")
+        temp_path = os.path.join(page_path, "temp/")
 
         for filename in os.listdir(temp_path):
             source = os.path.join(temp_path, filename)

@@ -112,6 +112,10 @@ class Database():
         if not os.path.exists(pages_path):
             os.makedirs(pages_path)
 
+        merge_path = os.path.join(self.path, "pages/temp")
+        if not os.path.exists(merge_path):
+            os.makedirs(merge_path)
+
     def create_table(self, name, num_columns, key_index, index_config=None):
         """
         # Creates a new table
