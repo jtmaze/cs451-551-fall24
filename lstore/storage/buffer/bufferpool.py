@@ -50,9 +50,6 @@ class Bufferpool:
 
         # Saves page id and col as tuple in key for eviction
         self.evict_queue = OrderedDict()
-        
-        self.evict_lock = threading.Lock()
-        self.disk_lock = threading.Lock()
 
         self._new_vals_buffer = [None for _ in range(self.tcols)]
 
@@ -97,9 +94,6 @@ class Bufferpool:
         new_vals[MetaCol.INDIR] = 0
         new_vals[MetaCol.RID] = int(tail_rid)
         pages_t.write_vals(new_vals)
-
-        pages_t.lock.release()
-        pages_b.lock.release()
 
         # Return new base rid for index
         return rid
@@ -177,8 +171,8 @@ class Bufferpool:
 
         pages_t.write_vals(new_vals)
 
-        pages_t.lock.release()
-        pages_b.lock.release()
+        # pages_t.lock.release()
+        # pages_b.lock.release()
 
     def read(
             self,
@@ -225,26 +219,21 @@ class Bufferpool:
 
     def restore(self, rid: RID):
         """
-        Restores a deleted record by resetting the tombstone flag.
+        Undoes delete/update by moving indirection back one element
         :param rid: RID of the record to restore
         """
         try:
             pages_id, offset = rid.get_loc()
-            page = self.page_table.get_page(pages_id, MetaCol.INDIR)
-            if page is None:
-                page = self.fetch_page(pages_id)
 
-            # Read the current indirection value
-            record_val = RID(self._read_val(MetaCol.INDIR, pages_id, offset))
-            if record_val.tombstone == 1:
-                # Reset tombstone flag
-                restored_val = RID.from_params(
-                    record_val.pages_id, record_val.pages_offset, is_base=record_val.is_base, tombstone=0
-                )
-                self._overwrite_val(MetaCol.INDIR, rid, int(restored_val))
+            tail_rid = RID(self._read_val(MetaCol.INDIR, pages_id, offset))
+            pages_id_prev, offset_prev = tail_rid.get_loc()
+            
+            prev_rid = self._read_val(MetaCol.INDIR, pages_id_prev, offset_prev)
+
+            self._overwrite_val(MetaCol.INDIR, rid, prev_rid)
+
+            if config.DEBUG_PRINT:
                 print(f"Record {rid} restored successfully.")
-            else:
-                print(f"Record {rid} is not marked as deleted.")
         except Exception as e:
             print(f"Error restoring record {rid}: {e}")
 
@@ -388,16 +377,15 @@ class Bufferpool:
         
         page = pages[col]
 
-        if page.pin_count <= 0:
-            is_entry_empty = self.page_table.remove_page(pages_id, col)
+        is_entry_empty = self.page_table.remove_page(pages_id, col)
 
-            # Also remove page from head/page trackers
-            if is_entry_empty:
-                tracker = self.tail_trackers if pages_id % 2 else self.base_trackers
-                tracker.pop(pages_id, None)
+        # Also remove page from head/page trackers
+        if is_entry_empty:
+            tracker = self.tail_trackers if pages_id % 2 else self.base_trackers
+            tracker.pop(pages_id, None)
 
-            # Write to disk (will check if dirty)
-            self._flush_page_to_disk(page, pages_id, col)
+        # Write to disk (will check if dirty)
+        self._flush_page_to_disk(page, pages_id, col)
 
     def _flush_page_to_disk(self, page, pages_id, col):
         """Currently writes page to disk."""

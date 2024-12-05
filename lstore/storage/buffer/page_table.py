@@ -14,6 +14,7 @@ from lstore import config
 from lstore.page import Page
 from lstore.storage.uid_gen import UIDGenerator
 from lstore.storage.rid import RID
+from lstore.storage.thread_lock import ThreadLock
 
 class PageTableEntry:
     # Cache config params
@@ -31,7 +32,8 @@ class PageTableEntry:
         # Offset in bytes, ie how many bytes are occupied by each page
         self.offset = Page.header_size
 
-        self.lock = threading.Lock()
+        # self.lock = threading.Lock()
+        self.lock = ThreadLock()
 
     def __getitem__(self, index: int) -> Page:
         return self.pages[index]

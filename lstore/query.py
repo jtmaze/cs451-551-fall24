@@ -25,25 +25,21 @@ class Query:
         # Returns True upon successful deletion
         # Return False if record doesn't exist or is locked due to 2PL
         """
-        try:
-            # Locate the RID via the primary key
-            rid_list = self.table.index.locate(self.table.key, primary_key)
-            if not rid_list:
-                return False  # Record not found
+        # Locate the RID via the primary key
+        rid_list = self.table.index.locate(self.table.key, primary_key)
+        if not rid_list:
+            return False  # Record not found
 
-            rid = rid_list[0]
-            # Log state for rollback if in a transaction
-            if self.transaction_context:
-                record = self.table.buffer.get_record(
-                    rid, [1] * self.table.num_columns, rel_version=0
-                )
-                self.transaction_context.log_delete(rid, record)
+        rid = rid_list[0]
+        # Log state for rollback if in a transaction
+        if self.transaction_context:
+            record = self.table.buffer.get_record(
+                rid, [1] * self.table.num_columns, rel_version=0
+            )
+            self.transaction_context.log_delete(rid, record)
 
-            self.table.delete(rid, primary_key)
-            return True
-        except Exception as e:
-            self._print_error(e)
-            return False
+        self.table.delete(rid, primary_key)
+        return True
 
     def insert(self, *columns) -> bool:
         """
@@ -51,13 +47,9 @@ class Query:
         # Return True upon succesful insertion
         # Returns False if insert fails for whatever reason
         """
-        try:
-            # Insert the record into the table
-            self.table.insert(columns)
-            return True
-        except Exception as e:
-            self._print_error(e)
-            return False
+        # Insert the record into the table
+        self.table.insert(columns)
+        return True
 
     def select(
         self,
@@ -100,26 +92,22 @@ class Query:
         # Returns True if update is succesful
         # Returns False if no records exist with given key or if the target record cannot be accessed due to 2PL locking
         """
-        try:
-            # Locate the RID via the primary key
-            rid_list = self.table.index.locate(self.table.key, primary_key)
-            if not rid_list:
-                return False  # Record not found
+        # Locate the RID via the primary key
+        rid_list = self.table.index.locate(self.table.key, primary_key)
+        if not rid_list:
+            return False  # Record not found
 
-            rid = rid_list[0]
+        rid = rid_list[0]
 
-            # Log state for rollback if in a transaction
-            if self.transaction_context:
-                record = self.table.buffer.get_record(
-                    rid, [1] * self.table.num_columns, rel_version=0
-                )
-                self.transaction_context.log_update(rid, record.columns)
+        # Log state for rollback if in a transaction
+        if self.transaction_context:
+            record = self.table.buffer.get_record(
+                rid, [1] * self.table.num_columns, rel_version=0
+            )
+            self.transaction_context.log_update(rid, record.columns)
 
-            self.table.update(rid, columns, primary_key)
-            return True
-        except Exception as e:
-            self._print_error(e)
-            return False
+        self.table.update(rid, columns, primary_key)
+        return True
 
     def sum(self, start_range, end_range, aggregate_column_index):
         """
@@ -167,35 +155,26 @@ class Query:
         """
         Core select functionality for use by select and select_version.
         """
-        try:
-            # Get projected list of records
-            records = self.table.select(
-                search_key,
-                search_key_index,
-                projected_columns_index,
-                relative_version,
-            )
+        # Get projected list of records
+        records = self.table.select(
+            search_key,
+            search_key_index,
+            projected_columns_index,
+            relative_version,
+        )
 
-            return records
-        except Exception as e:
-            self._print_error(e)
-            return False
+        return records
         
     def _select_core_range(self, start_range, end_range, search_key_index, projected_columns_index, relative_version=0):
-        try: 
-            records = self.table.select_range(
-                start_range,
-                end_range,
-                search_key_index,
-                projected_columns_index,
-                relative_version
-            )
-            
-            return records
-        except Exception as e:
-            self._print_error(e)
-            return False
+        records = self.table.select_range(
+            start_range,
+            end_range,
+            search_key_index,
+            projected_columns_index,
+            relative_version
+        )
         
+        return records
 
     def _sum_core(self, start_range, end_range, aggregate_column_index, relative_version=0):
         """
@@ -203,17 +182,13 @@ class Query:
 
         TODO: REMOVE THAT WE GRAB WHOLE RECORDS WHEN CHECKING VALS
         """
-        try:
-            total_sum = 0
-            records = self.select_version_range(
-                    start_range, end_range, self.table.key, [1] * self.table.num_columns, relative_version)
-            if records:
-                for record in records:
-                    total_sum += record.columns[aggregate_column_index]
-            return total_sum
-        except Exception as e:
-            self._print_error(e)
-            return False
+        total_sum = 0
+        records = self.select_version_range(
+                start_range, end_range, self.table.key, [1] * self.table.num_columns, relative_version)
+        if records:
+            for record in records:
+                total_sum += record.columns[aggregate_column_index]
+        return total_sum
         
     def count(self, start_range, end_range, column_index, relative_version = 0):
         """
@@ -222,15 +197,12 @@ class Query:
         """
         proj_col_idx = [0] * self.table.num_columns
         proj_col_idx[column_index] = 1
-        try:
-            total_count = 0
-            records = self.select_version_range(start_range, end_range, column_index, proj_col_idx, relative_version)
-            if records:
-                total_count = len(records)
-            return total_count
-        except Exception as e:
-            self._print_error(e)
-            return False
+
+        total_count = 0
+        records = self.select_version_range(start_range, end_range, column_index, proj_col_idx, relative_version)
+        if records:
+            total_count = len(records)
+        return total_count
 
 
     @staticmethod

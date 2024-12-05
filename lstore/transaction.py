@@ -1,65 +1,75 @@
-from lstore import table
-from lstore.table import Table, Record
-from lstore.index import Index
+import time
 
+from lstore.storage.thread_local import ThreadLocalSingleton
 
 class Transaction:
-    """
-    # Creates a transaction object.
-    """
 
     def __init__(self):
+        """
+        # Creates a transaction object.
+        """
         self.queries = []
-        self.logs = []  # Store logs for rollback
         self.state = "active"  # Transaction state: active, committed, aborted
+        self.insert_logs = []  # Store logs for rollback
         self.update_logs = []  # Log for rollback of updates
-        self.delete_logs = []  # Log for rollback of deletes
 
-    """
-    # Adds the given query to this transaction
-    # Example:
-    # q = Query(grades_table)
-    # t = Transaction()
-    # t.add_query(q.update, grades_table, 0, *[None, 1, None, 2, None])
-    """
+        self.ts = time.time()
+
 
     def add_query(self, query, table, *args):
+        """
+        # Adds the given query to this transaction
+        # Example:
+        # q = Query(grades_table)
+        # t = Transaction()
+        # t.add_query(q.update, grades_table, 0, *[None, 1, None, 2, None])
+        """
         self.queries.append((query, table, args))
-        # Log changes for rollback
-        if query.__name__ == "update" or query.__name__ == "delete":
-            self.logs.append((query, table, args))
 
     # If you choose to implement this differently this method must still return True if transaction commits or False on abort
     def run(self):
         for query, table, args in self.queries:
-            try:
-                result = query(*args)
-                # If the query fails, the transaction should abort
-                if result is False:
-                    return self.abort()
-            except Exception as e:
-                print(f"Transaction failed due to error: {e}")
+            # If transaction caused an issue with an early transaction, rollback
+            if self.state == "abort":
+                self.abort()
+
+            result = query(*args)
+            
+            # If the query fails, the transaction should abort
+            if result is False:
                 return self.abort()
+            
+            # Log changes for rollback
+            if query.__name__ == "insert":
+                self.insert_logs.append((query, table, args))
+            if query.__name__ in ("update", "delete"):
+                self.update_logs.append((query, table, args))
+            
         return self.commit()
 
-    """
-    Rolls back the transaction by undoing all changes.
-    """
-
     def abort(self):
+        """
+        Rolls back the transaction by undoing all changes.
+        """
         self.state = "aborted"
         print("Transaction aborted. Rolling back changes...")
 
+        # Rollback insertions
+        for query, table, args in reversed(self.insert_logs):
+            pass
+
         # Rollback updates
-        for rid, original_columns in reversed(self.update_logs):
-            table.rollback_update(rid, original_columns)
+        for query, table, args in reversed(self.update_logs):
+            primary_key = args[0]
+            table.rollback_update(primary_key)
 
-        # Rollback deletes
-        for rid, record in reversed(self.delete_logs):
-            table.rollback_delete(rid)
-
+        self.insert_logs.clear()
         self.update_logs.clear()
-        self.delete_logs.clear()
+
+        thread_local = ThreadLocalSingleton.get_instance()
+        for lock in reversed(thread_local.held_locks):
+            lock.release()
+
         return False
 
     def commit(self):
@@ -69,8 +79,8 @@ class Transaction:
         self.state = "committed"
         print("Transaction committed successfully.")
         # Clear logs since changes are committed
+        self.insert_logs.clear()
         self.update_logs.clear()
-        self.delete_logs.clear()
         return True
 
     def log_update(self, rid, original_columns):

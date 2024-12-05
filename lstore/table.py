@@ -121,10 +121,8 @@ class Table:
                 self.index.insert_val(
                     col, columns[col], rid, is_prim_key=(col == self.key))
         except Table.DuplicateKeyError as e:
-            print(e)
-        except Exception as e:
-            print(f"Error inserting record '{columns}'")
-            raise  # Re-raise exception error
+            # print(e)
+            raise
 
     def select(
         self,
@@ -154,9 +152,6 @@ class Table:
                 )
             except KeyError:
                 pass
-            except Exception as e:
-                if config.DEBUG_PRINT:
-                    print(f"Failed to find rid={rid.rid}")
 
         return records
     
@@ -171,12 +166,9 @@ class Table:
         rid_list = self.index.locate_range(start_range, end_range, search_key_idx, is_prim_key = (search_key_idx == self.key))
         records = []
         for rid in rid_list:
-            try:
-                records.append(
-                    self.buffer.get_record(rid, proj_col_idx, rel_version)
-                )
-            except Exception as e:
-                print(f"Failed to find rid={rid.rid}")
+            records.append(
+                self.buffer.get_record(rid, proj_col_idx, rel_version)
+            )
 
         return records
 
@@ -255,7 +247,8 @@ class Table:
     def merge(self):
         # self.flush_pages()
 
-        print("Running merge...")
+        if config.DEBUG_PRINT:
+            print("Running merge...")
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             merge_future = executor.submit(self.merge_mgr.merge)
@@ -264,6 +257,27 @@ class Table:
                 self.merge_mgr.finalize_merge)        
 
         self.num_updates = 0
+
+    def rollback_insert(self, primary_key):
+        try:
+            self.index.indices[self.key].delete(primary_key)
+
+            if config.DEBUG_PRINT:
+                print(f"Rollback insert: Restored record for '{primary_key}' to original values.")
+        except Exception as e:
+            print(f"Error rolling back insert for record for '{primary_key}': {e}")
+
+    def rollback_update(self, primary_key):
+        try:
+            rid = self.index.locate(self.key, primary_key)
+
+            # Change base rid to tails indir (ie rollback)
+            self.buffer.revert_update(rid)
+
+            if config.DEBUG_PRINT:
+                print(f"Rollback update: Restored record {int(rid)} to original values.")
+        except Exception as e:
+            print(f"Error rolling back update for record {int(rid)}: {e}")
 
     # Helpers ------------------------------------------------
 
@@ -286,22 +300,3 @@ class Table:
         if not self.index.locate(self.key, primary_key):
             e = f"No record with key {primary_key} exists, skipping delete."
             raise Table.MissingKeyError(e)
-
-    # the following functions will be called by transaction.abort for rollback
-    def rollback_update(self, rid, original_columns):
-        # Restore original columns
-        try:
-            # Restore the original columns as a tail record update
-            self.buffer.update_record(rid, original_columns)
-            print(f"Rollback update: Restored record {rid} to original values.")
-        except Exception as e:
-            print(f"Error rolling back update for record {rid}: {e}")
-
-    def rollback_delete(self, rid):
-        # Mark the record as valid again
-        try:
-            # Restore the deleted record to make it valid again
-            self.buffer.restore_record(rid)
-            print(f"Rollback delete: Restored record {rid} as valid.")
-        except Exception as e:
-            print(f"Error rolling back delete for record {rid}: {e}")

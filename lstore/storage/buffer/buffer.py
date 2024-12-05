@@ -84,7 +84,7 @@ class Buffer:
             rid, 1, tuple(None for _ in range(self.table.num_columns)))
         # for rollback(transaction.py)
 
-    def restore_record(self, rid: RID):
+    def revert_update(self, rid: RID):
         """
         Restores a deleted record by resetting its tombstone flag.
         :param rid: The RID of the record to restore

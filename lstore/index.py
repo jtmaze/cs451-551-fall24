@@ -96,6 +96,11 @@ class Index:
         """
         # optional: Drop index of specific column
         """
+        if column_number == self.key:
+            if config.DEBUG_PRINT:
+                print("Skipping attempt to drop primary key index")
+            return
+
         if self.indices[column_number] is not None:
             self.indices[column_number] = None
 
