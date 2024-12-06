@@ -1,10 +1,15 @@
+import sys
+import os
+
+# Add root dir to path to find lstore
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import unittest
 from lstore.db import Database
 from lstore.query import Query
 from lstore.transaction import Transaction
 from lstore.transaction_worker import TransactionWorker
 from random import randint, seed
-
 
 class TestDatabase(unittest.TestCase):
     def setUp(self):

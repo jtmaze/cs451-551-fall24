@@ -37,14 +37,14 @@ class Table:
         """Custom exception for missing primary keys."""
         pass
 
-    def __init__(self, 
-        name: str,
-        num_columns: int, 
-        key: int,
-        db_path: str,
-        index_config: IndexConfig,
-        delete_tracker: list[int] = None
-    ):
+    def __init__(self,
+                 name: str,
+                 num_columns: int,
+                 key: int,
+                 db_path: str,
+                 index_config: IndexConfig,
+                 delete_tracker: list[int] = None
+                 ):
         if key >= num_columns:
             raise IndexError("Key index is greater than the number of columns")
 
@@ -154,7 +154,7 @@ class Table:
                 pass
 
         return records
-    
+
     def select_range(
         self,
         start_range: int,
@@ -163,7 +163,8 @@ class Table:
         proj_col_idx: list[Literal[0, 1]],
         rel_version: int = 0  # Default to newest tail (lastest version)
     ) -> list[Record]:
-        rid_list = self.index.locate_range(start_range, end_range, search_key_idx, is_prim_key = (search_key_idx == self.key))
+        rid_list = self.index.locate_range(
+            start_range, end_range, search_key_idx, is_prim_key=(search_key_idx == self.key))
         records = []
         for rid in rid_list:
             records.append(
@@ -187,8 +188,10 @@ class Table:
             self._validate_primary_key_update(primary_key)
 
             # Get old values to delete from indexes
-            proj_idx = [1 if columns[i] is not None else 0 for i in range(len(columns))]
-            old_values = self.select(primary_key, self.key, proj_idx)[0] # Primary key and already validated
+            proj_idx = [1 if columns[i]
+                        is not None else 0 for i in range(len(columns))]
+            old_values = self.select(primary_key, self.key, proj_idx)[
+                0]  # Primary key and already validated
             old_values = old_values.columns
 
             # Update primary and secondary indexes for all updated values
@@ -203,7 +206,7 @@ class Table:
                     # Ensure new primary key doesn't already exist if needed
                     if new_idx == self.key:
                         self._validate_primary_key_insert(new_value)
-                    
+
                     # Delete current and insert new primary key into index
                     self.index.update_val(new_idx, old_value, new_value, rid)
 
@@ -247,9 +250,9 @@ class Table:
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             merge_future = executor.submit(self.merge_mgr.merge)
-        
+
             merge_future.add_done_callback(
-                self.merge_mgr.finalize_merge)        
+                self.merge_mgr.finalize_merge)
 
         self.num_updates = 0
 
@@ -262,7 +265,8 @@ class Table:
             if config.DEBUG_PRINT:
                 print(f"Rollback insert: Removed record for '{primary_key}'")
         except Exception as e:
-            print(f"Error rolling back insert for record for '{primary_key}': {e}")
+            print(
+                f"Error rolling back insert for record for '{primary_key}': {e}")
 
     def rollback_update(self, primary_key):
         try:
@@ -271,7 +275,8 @@ class Table:
                 self.buffer.revert_update(rids[0])
 
             if config.DEBUG_PRINT:
-                print(f"Rollback update: Restored record {primary_key} to original values.")
+                print(
+                    f"Rollback update: Restored record {primary_key} to original values.")
         except Exception as e:
             print(f"Error rolling back update for record {primary_key}: {e}")
 

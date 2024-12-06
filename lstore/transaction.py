@@ -1,7 +1,5 @@
-import time
-import threading
-
 from lstore import config
+
 
 class Transaction:
     def __init__(self):
@@ -31,12 +29,12 @@ class Transaction:
                 self.insert_logs.append((query, table, args))
             elif query.__name__ in ("update", "delete"):
                 self.update_logs.append((query, table, args))
-                
+
             # If transaction caused an issue with an earlier transaction, rollback
             result = query(*args)
             if result is False or self.state == "abort":
                 return self.abort()
-            
+
         return self.commit()
 
     def abort(self):
@@ -57,7 +55,7 @@ class Transaction:
             table.rollback_update(primary_key)
 
         self.insert_logs.clear()
-        self.update_logs.clear() 
+        self.update_logs.clear()
 
         return False
 

@@ -85,7 +85,7 @@ def main():
     t3 = Transaction()
     t3.add_query(query.delete, grades_table, hit_prim_key1)
     t4 = Transaction()
-    t4.add_query(query.select, grades_table, hit_prim_key1)
+    t4.add_query(query.select, grades_table, hit_prim_key1, 0, [1,1,1,1,1])
 
     worker2 = TransactionWorker()
     worker2.add_transaction(t4)

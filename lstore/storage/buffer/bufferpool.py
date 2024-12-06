@@ -18,6 +18,7 @@ from lstore import config
 
 from lstore.storage.disk import Disk
 
+
 class Bufferpool:
     """
     A simple bufferpool that uses a hash table to store pages in memory,
@@ -39,8 +40,9 @@ class Bufferpool:
             self.max_buffer_size = max(self.tcols * 4, self.max_buffer_size)
 
         # Global page table for LRU/MRU eviction
-        self.page_table = PageTable(self.tcols)  # Maps page_id -> list of page objects per column
-        
+        # Maps page_id -> list of page objects per column
+        self.page_table = PageTable(self.tcols)
+
         # Pointers to pages in page_table (only as ordered sets)
         # Allows tracking base/tails in memory and and getting latest for writing
         self.base_trackers = OrderedDict()
@@ -69,11 +71,13 @@ class Bufferpool:
 
             # Create base rid
             pages_id_b, offset_b = pages_b.get_loc()
-            rid: RID = RID.from_params(pages_id_b, offset_b, is_base=1, tombstone=0)
+            rid: RID = RID.from_params(
+                pages_id_b, offset_b, is_base=1, tombstone=0)
 
             # Create 'tail' rid (copy of base)
             pages_id_t, offset_t = pages_t.get_loc()
-            tail_rid: RID = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=0)
+            tail_rid: RID = RID.from_params(
+                pages_id_t, offset_t, is_base=0, tombstone=0)
 
             # Cache buffer
             new_vals = self._new_vals_buffer
@@ -82,7 +86,7 @@ class Bufferpool:
             new_vals[MetaCol.INDIR] = int(tail_rid)
             new_vals[MetaCol.RID] = int(rid)
             new_vals[MetaCol.SCHEMA] = 0
-            new_vals[len(MetaCol):self.tcols] = columns # All data columns
+            new_vals[len(MetaCol):self.tcols] = columns  # All data columns
             pages_b.write_vals(new_vals)
 
             # Write first tail record (copy of base record)
@@ -115,7 +119,8 @@ class Bufferpool:
 
             # Create new RID
             pages_id_t, offset_t = pages_t.get_loc()
-            tail_rid = RID.from_params(pages_id_t, offset_t, is_base=0, tombstone=tombstone)
+            tail_rid = RID.from_params(
+                pages_id_t, offset_t, is_base=0, tombstone=tombstone)
 
             # Cache for performance
             _read_val_cached = self._read_val
@@ -124,7 +129,8 @@ class Bufferpool:
             # Indirection -----------------
 
             # Set new tail indir to prev tail rid and base indir to new rid
-            indir_rid = RID(_read_val_cached(MetaCol.INDIR, pages_id_b, offset_b))
+            indir_rid = RID(_read_val_cached(
+                MetaCol.INDIR, pages_id_b, offset_b))
             new_vals[MetaCol.INDIR] = int(indir_rid)
             self._overwrite_val(MetaCol.INDIR, rid, tail_rid, pages_b)
 
@@ -138,10 +144,12 @@ class Bufferpool:
             pages_id_i, offset_i = indir_rid.get_loc()
 
             # Get latest schema encoding (go to latest tail if recently merged)
-            schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_b, offset_b)
+            schema_encoding = _read_val_cached(
+                MetaCol.SCHEMA, pages_id_b, offset_b)
             # If latest tail record previously merged into base record
-            if schema_encoding == -1:  
-                schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id_i, offset_i)
+            if schema_encoding == -1:
+                schema_encoding = _read_val_cached(
+                    MetaCol.SCHEMA, pages_id_i, offset_i)
 
             # Go through columns while updating schema encoding and data
             metalen = len(MetaCol)
@@ -188,7 +196,7 @@ class Bufferpool:
 
         # If a column has tail records, get record indices for correct version
         schema_encoding = _read_val_cached(MetaCol.SCHEMA, pages_id, offset)
-        
+
         # If schema encoding is -1 (ie latest merged into base), else if updated...
         if schema_encoding == -1 and rel_version == 0:
             pages_id, offset = rid.get_loc()
@@ -199,8 +207,8 @@ class Bufferpool:
         # Read projected data
         meta_len = len(MetaCol)
         columns = [
-            _read_val_cached(i, pages_id, offset) 
-            for i in range(meta_len, self.tcols) 
+            _read_val_cached(i, pages_id, offset)
+            for i in range(meta_len, self.tcols)
             if proj_col_idx[i - meta_len]
         ]
 
@@ -216,8 +224,9 @@ class Bufferpool:
 
             tail_rid = RID(self._read_val(MetaCol.INDIR, pages_id, offset))
             pages_id_prev, offset_prev = tail_rid.get_loc()
-            
-            prev_rid = self._read_val(MetaCol.INDIR, pages_id_prev, offset_prev)
+
+            prev_rid = self._read_val(
+                MetaCol.INDIR, pages_id_prev, offset_prev)
 
             self._overwrite_val(MetaCol.INDIR, rid, prev_rid)
 
@@ -247,7 +256,8 @@ class Bufferpool:
 
         if pages is None:
             pages, pages_id = self.page_table.create_pages(is_base)
-            page_tracker[pages_id] = None  # Value doesn't matter, used as ordered set
+            # Value doesn't matter, used as ordered set
+            page_tracker[pages_id] = None
         elif not pages.has_capacity():
             pages, pages_id = self.page_table.create_pages(is_base)
 
@@ -255,13 +265,15 @@ class Bufferpool:
             if self.max_buffer_size:
                 for col in range(self.tcols):
                     self.evict_queue[(pages_id, col)] = None
-                    self.evict_queue.move_to_end((pages_id, col), last=self.use_lru)
+                    self.evict_queue.move_to_end(
+                        (pages_id, col), last=self.use_lru)
                     self._evict_pages()
 
-            page_tracker[pages_id] = None  # Value doesn't matter, used as ordered set
+            # Value doesn't matter, used as ordered set
+            page_tracker[pages_id] = None
 
         return pages
-    
+
     def _overwrite_val(self, col: int, rid, val: int, pages: PageTableEntry = None):
         pages_id, offset = rid.get_loc()
 
@@ -275,7 +287,7 @@ class Bufferpool:
         page = pages[col]
         if page is None:
             page = self._get_page_from_disk(pages, pages_id, col)
-        
+
         pages.offset = page.offset
 
         self._update_evict_queue(pages_id, col)
@@ -303,7 +315,7 @@ class Bufferpool:
         self._update_evict_queue(pages_id, col)
 
         return page.read(offset)
-        
+
     def _get_page_from_disk(self, pages: PageTableEntry, pages_id: int, col: int):
         """
         Gets page from disk, adds it to page entry and adds to evict queue.
@@ -317,7 +329,7 @@ class Bufferpool:
         self._add_to_evict_queue(pages_id, col)
 
         return page
-        
+
     def _add_to_evict_queue(self, pages_id, col):
         if self.max_buffer_size:
             self.evict_queue[(pages_id, col)] = None
@@ -325,7 +337,8 @@ class Bufferpool:
     def _update_evict_queue(self, pages_id, col):
         if self.max_buffer_size:
             try:
-                self.evict_queue.move_to_end((pages_id, col), last=self.use_lru)
+                self.evict_queue.move_to_end(
+                    (pages_id, col), last=self.use_lru)
                 self._evict_pages()
             except KeyError:
                 pass
@@ -363,7 +376,7 @@ class Bufferpool:
         pages_id, col = self.evict_queue.popitem(last=False)[0]
 
         pages = self.page_table.get_entry(pages_id)
-        
+
         page = pages[col]
 
         is_entry_empty = self.page_table.remove_page(pages_id, col)
