@@ -6,7 +6,6 @@ offsets.
 
 from typing import Literal
 
-import threading
 from collections import OrderedDict  # MRU cache
 
 from lstore.storage.record import Record
@@ -17,7 +16,6 @@ from lstore.storage.buffer.page_table import PageTable, PageTableEntry
 
 from lstore import config
 
-from lstore.page import Page
 from lstore.storage.disk import Disk
 
 class Bufferpool:

@@ -1,12 +1,9 @@
 import time
 import threading
 
-from lstore.storage.thread_local import ThreadLocalSingleton
+from lstore import config
 
 class Transaction:
-    _ts_lock = threading.Lock()
-    _last_ts = 0
-
     def __init__(self):
         """
         # Creates a transaction object.
@@ -15,8 +12,6 @@ class Transaction:
         self.state = "active"  # Transaction state: active, committed, aborted
         self.insert_logs = []  # Store logs for rollback
         self.update_logs = []  # Log for rollback of updates
-
-        self.ts = self._next_timestamp()
 
     def add_query(self, query, table, *args):
         """
@@ -34,25 +29,12 @@ class Transaction:
             # Log changes for rollback
             if query.__name__ == "insert":
                 self.insert_logs.append((query, table, args))
-
-                result = query(*args)
-                
-                # Check insert worked
-                primary_key = args[0]
-                rids = table.index.locate(table.key, primary_key)
-                if not rids:
-                    return self.abort()
             elif query.__name__ in ("update", "delete"):
                 self.update_logs.append((query, table, args))
-
-                result = query(*args)
-
-                # Check update/delete worked
-                if result is False:
-                    return self.abort()
                 
             # If transaction caused an issue with an earlier transaction, rollback
-            if self.state == "abort":
+            result = query(*args)
+            if result is False or self.state == "abort":
                 return self.abort()
             
         return self.commit()
@@ -77,10 +59,6 @@ class Transaction:
         self.insert_logs.clear()
         self.update_logs.clear() 
 
-        thread_local = ThreadLocalSingleton.get_instance()
-        for lock in reversed(thread_local.held_locks):
-            lock.release()
-
         return False
 
     def commit(self):
@@ -88,17 +66,9 @@ class Transaction:
         Finalizes the transaction and commits changes to the database.
         """
         self.state = "committed"
-        print("Transaction committed successfully.")
+        if config.DEBUG_PRINT:
+            print("Transaction committed successfully.")
         # Clear logs since changes are committed
         self.insert_logs.clear()
         self.update_logs.clear()
         return True
-    
-    @classmethod
-    def _next_timestamp(cls):
-        with cls._ts_lock:
-            ts = time.monotonic_ns()
-            while ts <= cls._last_ts:
-                ts = cls._last_ts + 1
-            cls._last_ts = ts
-            return ts

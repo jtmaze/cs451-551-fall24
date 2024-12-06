@@ -6,7 +6,6 @@ buffer and indices for performant querying.
 
 from typing import Literal
 
-import threading
 import concurrent.futures
 
 from lstore.index import Index

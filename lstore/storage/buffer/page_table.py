@@ -6,7 +6,6 @@ themselves wrappers around lists of pages per column.
 """
 
 import threading
-from collections import OrderedDict
 import threading
 
 from lstore import config
@@ -14,14 +13,13 @@ from lstore import config
 from lstore.page import Page
 from lstore.storage.uid_gen import UIDGenerator
 from lstore.storage.rid import RID
-from lstore.storage.thread_lock import ThreadLock
 
 class PageTableEntry:
     # Cache config params
     record_size = config.RECORD_SIZE
     page_size = config.PAGE_SIZE
 
-    def __init__(self, pages_id: int, total_cols: int, offset=None) -> None:
+    def __init__(self, pages_id: int, total_cols: int) -> None:
         self.pages = [None for _ in range(total_cols)]
 
         self.pages_id = pages_id
