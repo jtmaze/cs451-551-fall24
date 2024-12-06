@@ -33,7 +33,7 @@ class Bufferpool:
         self.tcols = self.table.num_total_cols
 
         # Cache config
-        self.use_lru = config.USE_LRU_NOT_MRU
+        self.use_lru = True
         self.max_buffer_size = config.MAX_BUFFER_PAGES
         if self.max_buffer_size is not None:
             # Ensure the buffer size can at least contain sets of read/write base/tail pages (4)

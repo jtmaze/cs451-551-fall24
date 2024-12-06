@@ -34,8 +34,8 @@ The database now ensures **durability** through robust disk I/O mechanisms:
 
 #### **Threading vs. Multiprocessing**  
 
-- Due to Python's **Global Interpreter Lock (GIL)**, we opted for **multithreading** instead of multiprocessing for the merge process.  
-  - While threading supports minimal performance improvements during I/O-bound tasks, it ensures safe execution and avoids complexities like per-import execution issues in multiprocessing.  
+- Despite Python's **Global Interpreter Lock (GIL)**, we opted for **multithreading** instead of multiprocessing for the merge process.  
+  - While multithreading supports minimal performance improvements only during I/O-bound tasks, it ensures safe execution and avoids complexities like per-import execution issues in multiprocessing.  
   - This ensures stability, but the merge process may slightly delay transactions.
 
 #### **Merge Threshold**  
@@ -102,17 +102,5 @@ else:
     print("Transaction committed successfully.")
 ```
 
-### **Testing & Validation**
-- Comprehensive unittests are provided to verify core functionalities, including:
-  - Table creation, insertion, selection, updating, and deletion.
-  - Merge operations and bufferpool eviction. 
-  - Index reconstruction and transaction rollback scenarios.
-- Tests cover edge cases such as:
-  - Duplicate primary key insertion.
-  - Out-of-range queries.
-  - Transaction conflicts.
-
 ### **Final Notes**
-This submission represents a robust and functional implementation of LStore, balancing functionality, performance, and modularity. Configuration parameters can be easily adjusted to suit various testing environments and workloads.
-
-**We hope this system demonstrates our understanding of database design principles and our ability to implement them in practice.**
+This submission represents a functional implementation of LStore, balancing functionality, performance, and modularity. Configuration parameters can be easily adjusted to suit various testing environments and workloads.

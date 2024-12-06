@@ -6,4 +6,3 @@ DEBUG_PRINT = False
 UID_DIR = "db_storage/"
 MERGE_UPDATE_THRESHOLD = 100_000  # Number of updates to trigger merge
 MERGE_BATCH_SIZE = 1_000      # Number of base pages processed per batch
-USE_LRU_NOT_MRU = True        # Whether to use LRU or MRU cache eviction
