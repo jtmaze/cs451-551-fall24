@@ -114,7 +114,7 @@ class Table:
         try:
             primary_key = columns[self.key]
 
-            with self._get_key_lock(primary_key):
+            with self._get_key_lock(primary_key), self.index.get_lock():
                 # Check if primary key exists (raises error if not)
                 self._validate_primary_key_insert(primary_key)
 
@@ -126,7 +126,6 @@ class Table:
                     self.index.insert_val(
                         col, columns[col], rid, is_prim_key=(col == self.key))
         except Table.DuplicateKeyError as e:
-            # print(e)
             raise
 
     def select(
@@ -187,39 +186,36 @@ class Table:
         :param columns: New data values
         :param primary_key: Primary key VALUE, not column index
         """
-        try:
-            with self._get_key_lock(primary_key):
-                # Check that primary key exists
-                self._validate_primary_key_update(primary_key)
+        with self._get_key_lock(primary_key):
+            # Check that primary key exists
+            self._validate_primary_key_update(primary_key)
 
-                # Get old values to delete from indexes
-                proj_idx = [1 if columns[i] is not None else 0 for i in range(len(columns))]
-                old_values = self.select(primary_key, self.key, proj_idx)[0] # Primary key and already validated
-                old_values = old_values.columns
+            # Get old values to delete from indexes
+            proj_idx = [1 if columns[i] is not None else 0 for i in range(len(columns))]
+            old_values = self.select(primary_key, self.key, proj_idx)[0] # Primary key and already validated
+            old_values = old_values.columns
 
-                # Update primary and secondary indexes for all updated values
-                old_idx = 0
-                for new_idx, proj in enumerate(proj_idx):
-                    # If value is being updated
-                    if proj == 1:
-                        new_value = columns[new_idx]
-                        old_value = old_values[old_idx]
-                        old_idx += 1
+            # Update primary and secondary indexes for all updated values
+            old_idx = 0
+            for new_idx, proj in enumerate(proj_idx):
+                # If value is being updated
+                if proj == 1:
+                    new_value = columns[new_idx]
+                    old_value = old_values[old_idx]
+                    old_idx += 1
 
-                        # Ensure new primary key doesn't already exist if needed
-                        if new_idx == self.key:
-                            self._validate_primary_key_insert(new_value)
-                        
-                        # Delete current and insert new primary key into index
-                        self.index.update_val(new_idx, old_value, new_value, rid)
+                    # Ensure new primary key doesn't already exist if needed
+                    if new_idx == self.key:
+                        self._validate_primary_key_insert(new_value)
+                    
+                    # Delete current and insert new primary key into index
+                    self.index.update_val(new_idx, old_value, new_value, rid)
 
-                self.buffer.update_record(rid, columns)
+            self.buffer.update_record(rid, columns)
 
-                self.num_updates += 1
-                if self.num_updates >= self.merge_threshold:
-                    self.merge()
-        except Table.DuplicateKeyError as e:
-            print(e)
+            self.num_updates += 1
+            if self.num_updates >= self.merge_threshold:
+                self.merge()
 
     def delete(self, rid: RID, primary_key):
         """
@@ -227,14 +223,11 @@ class Table:
 
         :param rid: RID of record to 'delete'
         """
-        try:
-            with self._get_key_lock(primary_key):
-                self._validate_primary_key_delete(primary_key)
+        with self._get_key_lock(primary_key):
+            self._validate_primary_key_delete(primary_key)
 
-                self.buffer.delete_record(rid)
-                self.delete_tracker.add(primary_key)
-        except Table.DuplicateKeyError as e:
-            print(e)
+            self.buffer.delete_record(rid)
+            self.delete_tracker.add(primary_key)
 
     # Utility ----------------------
 

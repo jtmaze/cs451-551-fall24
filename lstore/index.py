@@ -124,7 +124,8 @@ class Index:
             if config.DEBUG_PRINT:
                 print(f"Tried updating value {old_val}->{new_val} for nonexistent index (col {col_number})")
 
-
+    def get_lock(self):
+        return self.indices[self.key].lock
 
     # Helper ---------------------
 

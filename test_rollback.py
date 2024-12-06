@@ -24,24 +24,25 @@ def main():
 
     record = [0, 1, 2, 3, 4]
 
-    transaction = Transaction()
-    worker = TransactionWorker()
+    t1 = Transaction()
+    t2 = Transaction()
+    worker1 = TransactionWorker()
+    worker2 = TransactionWorker()
 
-    transaction.add_query(query.insert, grades_table, *record)
-    transaction.add_query(query.select, grades_table, record[0], 0, [1, 1, 1, 1, 1])
-    transaction.add_query(query.insert, grades_table, *record)
+    t1.add_query(query.insert, grades_table, *record)
+    t1.add_query(query.select, grades_table, record[0], 0, [1, 1, 1, 1, 1])
+    
+    t2.add_query(query.insert, grades_table, *record)
+    t2.add_query(query.select, grades_table, record[0], 0, [1, 1, 1, 1, 1])
 
-    worker.add_transaction(transaction)
+    worker1.add_transaction(t1)
+    worker2.add_transaction(t2)
 
-    worker.run()
-    worker.join()
-
-    print(query.select(0, 0, [1, 1, 1, 1, 1]))
-
-    print(transaction.logs)
-    print(transaction.delete_logs)
-    print(transaction.update_logs)
-
+    for worker in (worker1, worker2):
+        worker.run()
+    
+    for worker in (worker1, worker2):
+        worker.join()
 
 
 if __name__ == "__main__":

@@ -30,8 +30,8 @@ def main():
             randint(i * 20, (i + 1) * 20)
         ]
 
-    for record in records:
-        query.insert(record)
+    for record in records.values():
+        query.insert(*record)
 
 
     """Easy to track these keys/values"""
@@ -57,24 +57,24 @@ def main():
 
     print("\n--- Test 1: Simultaneous Updates on the Same Primary Key ---")
     t1 = Transaction()
-    t1.add_query(query.update, grades_table, hit_prim_key1, [None, 5, 5, 5, 5])
+    t1.add_query(query.update, grades_table, hit_prim_key1, *[None, 5, 5, 5, 5])
     t2 = Transaction()
-    t2.add_query(query.update, grades_table, hit_prim_key1, [None, 10, 10, 10, 10])
+    t2.add_query(query.update, grades_table, hit_prim_key1, *[None, 10, 10, 10, 10])
 
     worker1 = TransactionWorker()
-    worker1.add_transaction(t1)
     worker1.add_transaction(t2)
+    worker1.add_transaction(t1)
 
     worker1.run()
     worker1.join()
 
-    result_after = query.select(hit_prim_key1, 0, [1,1,1,1,1])
+    result_after = query.select_version(hit_prim_key1, 0, [1,1,1,1,1], 0)
     print(f'Most recent after both transactions', result_after)
-    result_after_back1 = query.select(hit_prim_key1, -1, [1,1,1,1,1])
+    result_after_back1 = query.select_version(hit_prim_key1, 0, [1,1,1,1,1], -1)
     print(f'Version -1 after both transactions', result_after_back1)
 
-    print(f'T1 logs:', t1.logs, t1.delete_logs, t1.update_logs)
-    print(f'T2 logs:', t2.logs, t2.delete_logs, t2.update_logs)
+    # print(f'T1 logs:', t1.logs, t1.delete_logs, t1.update_logs)
+    # print(f'T2 logs:', t2.logs, t2.delete_logs, t2.update_logs)
 
     """" 
     Next, test simultaneous delete and select opperations 
@@ -88,14 +88,14 @@ def main():
     t4.add_query(query.select, grades_table, hit_prim_key1)
 
     worker2 = TransactionWorker()
-    worker2.add_transaction(t3)
     worker2.add_transaction(t4)
+    worker2.add_transaction(t3)
 
     worker2.run()
     worker2.join()
 
-    print(f'T3 logs:', t3.logs, t3.delete_logs, t3.update_logs)
-    print(f'T4 logs:', t4.logs, t4.delete_logs, t4.update_logs)
+    # print(f'T3 logs:', t3.logs, t3.delete_logs, t3.update_logs)
+    # print(f'T4 logs:', t4.logs, t4.delete_logs, t4.update_logs)
     final_result = query.select(hit_prim_key1, 0, [1, 1, 1, 1, 1])
     print(f"\nFinal state of key {hit_prim_key1}: {final_result}")
 
