@@ -1,40 +1,41 @@
 import threading
 
 class ThreadLocalSingleton:
-    _thread_local = threading.local()
+    _instance = None
+    _lock = threading.Lock()
 
-    def __init__(self):
-        # Prevent creating multiple instances in the same thread
-        if hasattr(self._thread_local, "instance"):
-            raise RuntimeError("Use get_instance() to get the singleton instance.")
-            
-    @classmethod
-    def init_thread_local(cls):
-        if not hasattr(cls._thread_local, "held_locks"):
-            cls._thread_local.held_locks = []
-        if not hasattr(cls._thread_local, "transaction"):
-            cls._thread_local.transaction = None
+    def __new__(cls):
+        # Ensure only one instance is ever created globally
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+                cls._instance._thread_local = threading.local()
+        return cls._instance
 
     @property
     def held_locks(self):
+        if not hasattr(self._thread_local, "held_locks"):
+            self._thread_local.held_locks = []
         return self._thread_local.held_locks
-    
+
     @held_locks.setter
     def held_locks(self, value):
+        if not hasattr(self._thread_local, "held_locks"):
+            self._thread_local.held_locks = []
         self._thread_local.held_locks = value
 
     @property
     def transaction(self):
+        if not hasattr(self._thread_local, "transaction"):
+            self._thread_local.transaction = None
         return self._thread_local.transaction
-    
+
     @transaction.setter
     def transaction(self, value):
+        if not hasattr(self._thread_local, "transaction"):
+            self._thread_local.transaction = None
         self._thread_local.transaction = value
 
     @classmethod
     def get_instance(cls):
-        if not hasattr(cls._thread_local, "instance"):
-            cls._thread_local.instance = cls()
-        return cls._thread_local.instance
-
-    
+        return cls()

@@ -40,12 +40,15 @@ class ThreadLock:
 
         # If failed, compare current thread's time to lock's transaction's time
         current_ts = self._thread_local.transaction.ts
-        if current_ts > self.transaction.ts:
+        lock_ts = self.transaction.ts
+        if current_ts > lock_ts:
             raise RollbackCurrentTransaction(self.transaction)
-        elif current_ts < self.transaction.ts:
+        elif current_ts < lock_ts:
             raise RollbackOtherTransaction(self.transaction)
         
-        raise RuntimeError("Lock unable to be acquired by same thread.")
+        print(self._thread_local.transaction, self.transaction)
+        
+        raise RuntimeError("Cannot resolve lock acquisition due to equal transaction timestamps.")
 
     def release(self):
         self.lock.release()
@@ -60,8 +63,3 @@ class ThreadLock:
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.release()
-
-    @classmethod
-    def get_thread_locks(cls):
-        singleton = ThreadLocalSingleton.get_instance()
-        return singleton.held_locks

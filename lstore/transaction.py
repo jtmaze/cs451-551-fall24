@@ -1,8 +1,11 @@
 import time
+import threading
 
 from lstore.storage.thread_local import ThreadLocalSingleton
 
 class Transaction:
+    _ts_lock = threading.Lock()
+    _last_ts = 0
 
     def __init__(self):
         """
@@ -13,8 +16,7 @@ class Transaction:
         self.insert_logs = []  # Store logs for rollback
         self.update_logs = []  # Log for rollback of updates
 
-        self.ts = time.time()
-
+        self.ts = self._next_timestamp()
 
     def add_query(self, query, table, *args):
         """
@@ -29,21 +31,29 @@ class Transaction:
     # If you choose to implement this differently this method must still return True if transaction commits or False on abort
     def run(self):
         for query, table, args in self.queries:
-            # If transaction caused an issue with an early transaction, rollback
-            if self.state == "abort":
-                self.abort()
-
-            result = query(*args)
-            
-            # If the query fails, the transaction should abort
-            if result is False:
-                return self.abort()
-            
             # Log changes for rollback
             if query.__name__ == "insert":
                 self.insert_logs.append((query, table, args))
-            if query.__name__ in ("update", "delete"):
+
+                result = query(*args)
+                
+                # Check insert worked
+                primary_key = args[0]
+                rids = table.index.locate(table.key, primary_key)
+                if not rids:
+                    return self.abort()
+            elif query.__name__ in ("update", "delete"):
                 self.update_logs.append((query, table, args))
+
+                result = query(*args)
+
+                # Check update/delete worked
+                if result is False:
+                    return self.abort()
+                
+            # If transaction caused an issue with an earlier transaction, rollback
+            if self.state == "abort":
+                return self.abort()
             
         return self.commit()
 
@@ -56,7 +66,8 @@ class Transaction:
 
         # Rollback insertions
         for query, table, args in reversed(self.insert_logs):
-            pass
+            primary_key = args[0]
+            table.rollback_insert(primary_key)
 
         # Rollback updates
         for query, table, args in reversed(self.update_logs):
@@ -64,7 +75,7 @@ class Transaction:
             table.rollback_update(primary_key)
 
         self.insert_logs.clear()
-        self.update_logs.clear()
+        self.update_logs.clear() 
 
         thread_local = ThreadLocalSingleton.get_instance()
         for lock in reversed(thread_local.held_locks):
@@ -82,19 +93,12 @@ class Transaction:
         self.insert_logs.clear()
         self.update_logs.clear()
         return True
-
-    def log_update(self, rid, original_columns):
-        """
-        Logs an update operation for rollback.
-        :param rid: The RID of the record being updated.
-        :param original_columns: The original column values before the update.
-        """
-        self.update_logs.append((rid, original_columns))
-
-    def log_delete(self, rid, record):
-        """
-        Logs a delete operation for rollback.
-        :param rid: The RID of the record being deleted.
-        :param record: The full record being deleted.
-        """
-        self.delete_logs.append((rid, record))
+    
+    @classmethod
+    def _next_timestamp(cls):
+        with cls._ts_lock:
+            ts = time.monotonic_ns()
+            while ts <= cls._last_ts:
+                ts = cls._last_ts + 1
+            cls._last_ts = ts
+            return ts

@@ -6,6 +6,7 @@ buffer and indices for performant querying.
 
 from typing import Literal
 
+import threading
 import concurrent.futures
 
 from lstore.index import Index
@@ -74,6 +75,9 @@ class Table:
         else:
             self.delete_tracker = set(delete_tracker)
 
+        self.key_locks = {}
+        self.key_locks_lock = threading.Lock()
+
     def reconstruct_index(self, index_cols: list[int]):
         """
         Rebuilds the index from the existing data in the table's base pages.
@@ -110,16 +114,17 @@ class Table:
         try:
             primary_key = columns[self.key]
 
-            # Check if primary key exists (raises error if not)
-            self._validate_primary_key_insert(primary_key)
+            with self._get_key_lock(primary_key):
+                # Check if primary key exists (raises error if not)
+                self._validate_primary_key_insert(primary_key)
 
-            # Insert a record, buffer will return its new RID
-            rid = self.buffer.insert_record(columns)
+                # Insert a record, buffer will return its new RID
+                rid = self.buffer.insert_record(columns)
 
-            # Update indexes
-            for col in self.index.index_cols:
-                self.index.insert_val(
-                    col, columns[col], rid, is_prim_key=(col == self.key))
+                # Update indexes
+                for col in self.index.index_cols:
+                    self.index.insert_val(
+                        col, columns[col], rid, is_prim_key=(col == self.key))
         except Table.DuplicateKeyError as e:
             # print(e)
             raise
@@ -183,35 +188,36 @@ class Table:
         :param primary_key: Primary key VALUE, not column index
         """
         try:
-            # Check that primary key exists
-            self._validate_primary_key_update(primary_key)
+            with self._get_key_lock(primary_key):
+                # Check that primary key exists
+                self._validate_primary_key_update(primary_key)
 
-            # Get old values to delete from indexes
-            proj_idx = [1 if columns[i] is not None else 0 for i in range(len(columns))]
-            old_values = self.select(primary_key, self.key, proj_idx)[0] # Primary key and already validated
-            old_values = old_values.columns
+                # Get old values to delete from indexes
+                proj_idx = [1 if columns[i] is not None else 0 for i in range(len(columns))]
+                old_values = self.select(primary_key, self.key, proj_idx)[0] # Primary key and already validated
+                old_values = old_values.columns
 
-            # Update primary and secondary indexes for all updated values
-            old_idx = 0
-            for new_idx, proj in enumerate(proj_idx):
-                # If value is being updated
-                if proj == 1:
-                    new_value = columns[new_idx]
-                    old_value = old_values[old_idx]
-                    old_idx += 1
+                # Update primary and secondary indexes for all updated values
+                old_idx = 0
+                for new_idx, proj in enumerate(proj_idx):
+                    # If value is being updated
+                    if proj == 1:
+                        new_value = columns[new_idx]
+                        old_value = old_values[old_idx]
+                        old_idx += 1
 
-                    # Ensure new primary key doesn't already exist if needed
-                    if new_idx == self.key:
-                        self._validate_primary_key_insert(new_value)
-                    
-                    # Delete current and insert new primary key into index
-                    self.index.update_val(new_idx, old_value, new_value, rid)
+                        # Ensure new primary key doesn't already exist if needed
+                        if new_idx == self.key:
+                            self._validate_primary_key_insert(new_value)
+                        
+                        # Delete current and insert new primary key into index
+                        self.index.update_val(new_idx, old_value, new_value, rid)
 
-            self.buffer.update_record(rid, columns)
+                self.buffer.update_record(rid, columns)
 
-            self.num_updates += 1
-            if self.num_updates >= self.merge_threshold:
-                self.merge()
+                self.num_updates += 1
+                if self.num_updates >= self.merge_threshold:
+                    self.merge()
         except Table.DuplicateKeyError as e:
             print(e)
 
@@ -222,10 +228,11 @@ class Table:
         :param rid: RID of record to 'delete'
         """
         try:
-            self._validate_primary_key_delete(primary_key)
+            with self._get_key_lock(primary_key):
+                self._validate_primary_key_delete(primary_key)
 
-            self.buffer.delete_record(rid)
-            self.delete_tracker.add(primary_key)
+                self.buffer.delete_record(rid)
+                self.delete_tracker.add(primary_key)
         except Table.DuplicateKeyError as e:
             print(e)
 
@@ -260,24 +267,27 @@ class Table:
 
     def rollback_insert(self, primary_key):
         try:
-            self.index.indices[self.key].delete(primary_key)
+            with self._get_key_lock(primary_key):
+                rids = self.index.indices[self.key].get(primary_key)
+                if rids:
+                    self.index.indices[self.key].delete(primary_key, rids[0])
 
-            if config.DEBUG_PRINT:
-                print(f"Rollback insert: Restored record for '{primary_key}' to original values.")
+                if config.DEBUG_PRINT:
+                    print(f"Rollback insert: Removed record for '{primary_key}'")
         except Exception as e:
             print(f"Error rolling back insert for record for '{primary_key}': {e}")
 
     def rollback_update(self, primary_key):
         try:
-            rid = self.index.locate(self.key, primary_key)
+            with self._get_key_lock(primary_key):
+                rids = self.index.locate(self.key, primary_key)
+                if rids:
+                    self.buffer.revert_update(rids[0])
 
-            # Change base rid to tails indir (ie rollback)
-            self.buffer.revert_update(rid)
-
-            if config.DEBUG_PRINT:
-                print(f"Rollback update: Restored record {int(rid)} to original values.")
+                if config.DEBUG_PRINT:
+                    print(f"Rollback update: Restored record {primary_key} to original values.")
         except Exception as e:
-            print(f"Error rolling back update for record {int(rid)}: {e}")
+            print(f"Error rolling back update for record {primary_key}: {e}")
 
     # Helpers ------------------------------------------------
 
@@ -300,3 +310,10 @@ class Table:
         if not self.index.locate(self.key, primary_key):
             e = f"No record with key {primary_key} exists, skipping delete."
             raise Table.MissingKeyError(e)
+
+    def _get_key_lock(self, primary_key):
+        # Acquire dictionary lock to safely read/update key_locks
+        with self.key_locks_lock:
+            if primary_key not in self.key_locks:
+                self.key_locks[primary_key] = threading.Lock()
+            return self.key_locks[primary_key]

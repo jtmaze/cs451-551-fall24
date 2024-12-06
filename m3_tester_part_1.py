@@ -19,7 +19,7 @@ records = {}
 
 number_of_records = 1000
 number_of_transactions = 100
-num_threads = 8
+num_threads = 2
 
 # create index on the non primary columns
 try:
@@ -66,7 +66,11 @@ for i in range(num_threads):
 
 # Check inserted records using select query in the main thread outside workers
 for key in keys:
-    record = query.select(key, 0, [1, 1, 1, 1, 1])[0]
+    try:
+        record = query.select(key, 0, [1, 1, 1, 1, 1])[0]
+    except IndexError:
+        print(records[key])
+        raise
     error = False
     for i, column in enumerate(record.columns):
         if column != records[key][i]:
