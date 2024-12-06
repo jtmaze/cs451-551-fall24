@@ -75,9 +75,6 @@ class Table:
         else:
             self.delete_tracker = set(delete_tracker)
 
-        self.key_locks = {}
-        self.key_locks_lock = threading.Lock()
-
     def reconstruct_index(self, index_cols: list[int]):
         """
         Rebuilds the index from the existing data in the table's base pages.
@@ -114,7 +111,7 @@ class Table:
         try:
             primary_key = columns[self.key]
 
-            with self._get_key_lock(primary_key), self.index.get_lock():
+            with self.index.get_lock():
                 # Check if primary key exists (raises error if not)
                 self._validate_primary_key_insert(primary_key)
 
@@ -186,7 +183,7 @@ class Table:
         :param columns: New data values
         :param primary_key: Primary key VALUE, not column index
         """
-        with self._get_key_lock(primary_key):
+        with self.index.get_lock():
             # Check that primary key exists
             self._validate_primary_key_update(primary_key)
 
@@ -223,11 +220,10 @@ class Table:
 
         :param rid: RID of record to 'delete'
         """
-        with self._get_key_lock(primary_key):
-            self._validate_primary_key_delete(primary_key)
+        self._validate_primary_key_delete(primary_key)
 
-            self.buffer.delete_record(rid)
-            self.delete_tracker.add(primary_key)
+        self.buffer.delete_record(rid)
+        self.delete_tracker.add(primary_key)
 
     # Utility ----------------------
 
@@ -260,25 +256,23 @@ class Table:
 
     def rollback_insert(self, primary_key):
         try:
-            with self._get_key_lock(primary_key):
-                rids = self.index.indices[self.key].get(primary_key)
-                if rids:
-                    self.index.indices[self.key].delete(primary_key, rids[0])
+            rids = self.index.indices[self.key].get(primary_key)
+            if rids:
+                self.index.indices[self.key].delete(primary_key, rids[0])
 
-                if config.DEBUG_PRINT:
-                    print(f"Rollback insert: Removed record for '{primary_key}'")
+            if config.DEBUG_PRINT:
+                print(f"Rollback insert: Removed record for '{primary_key}'")
         except Exception as e:
             print(f"Error rolling back insert for record for '{primary_key}': {e}")
 
     def rollback_update(self, primary_key):
         try:
-            with self._get_key_lock(primary_key):
-                rids = self.index.locate(self.key, primary_key)
-                if rids:
-                    self.buffer.revert_update(rids[0])
+            rids = self.index.locate(self.key, primary_key)
+            if rids:
+                self.buffer.revert_update(rids[0])
 
-                if config.DEBUG_PRINT:
-                    print(f"Rollback update: Restored record {primary_key} to original values.")
+            if config.DEBUG_PRINT:
+                print(f"Rollback update: Restored record {primary_key} to original values.")
         except Exception as e:
             print(f"Error rolling back update for record {primary_key}: {e}")
 
@@ -303,10 +297,3 @@ class Table:
         if not self.index.locate(self.key, primary_key):
             e = f"No record with key {primary_key} exists, skipping delete."
             raise Table.MissingKeyError(e)
-
-    def _get_key_lock(self, primary_key):
-        # Acquire dictionary lock to safely read/update key_locks
-        with self.key_locks_lock:
-            if primary_key not in self.key_locks:
-                self.key_locks[primary_key] = threading.Lock()
-            return self.key_locks[primary_key]

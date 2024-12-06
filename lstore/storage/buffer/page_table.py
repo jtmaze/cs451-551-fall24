@@ -32,9 +32,6 @@ class PageTableEntry:
         # Offset in bytes, ie how many bytes are occupied by each page
         self.offset = Page.header_size
 
-        # self.lock = threading.Lock()
-        self.lock = ThreadLock()
-
     def __getitem__(self, index: int) -> Page:
         return self.pages[index]
     
@@ -88,8 +85,6 @@ class PageTable:
         
         self.tcols = tcols
         self.size = 0
-
-        self.lock = threading.Lock()
 
     def __iter__(self):
         return iter(self.ptable)
